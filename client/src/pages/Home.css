@@ -1,0 +1,92 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+.layout {
+  display: flex;
+  height: 100vh;
+  background: #f4f6f9;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 240px;
+  background: #111827;
+  color: white;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar h2 {
+  margin-bottom: 30px;
+  font-size: 22px;
+}
+
+.sidebar a {
+  text-decoration: none;
+  color: #cbd5e1;
+  padding: 12px 10px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  transition: 0.3s;
+  display: block;
+}
+
+.sidebar a:hover {
+  background: #1f2937;
+  color: white;
+}
+
+/* Main area */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Navbar */
+.navbar {
+  height: 60px;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 25px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.content {
+  padding: 25px;
+}
+/* Sidebar collapse animation */
+.sidebar {
+  width: 240px;
+  transition: width 0.3s ease;
+}
+
+.sidebar.collapsed {
+  width: 70px;
+}
+
+.sidebar.collapsed h2 {
+  font-size: 16px;
+}
+
+/* Main expands */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  transition: margin-left 0.3s ease;
+}
+
+.menu-btn {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+}
