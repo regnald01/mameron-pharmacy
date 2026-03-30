@@ -1,18 +1,11 @@
-import { BrowserRouter, Routes, Route } from'react-router-dom';
-import  Home from './pages/Home'
-import Medicines from "./components/Medicine";
-import Dashboard from './components/Dashboard';
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Home from "./pages/Home";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Home />}>
-          <Route index element={<Dashboard />} />
-          <Route path="orders" element={""} />
-          <Route path="products" element={""} />
-          <Route path="Sales" element={<Medicines />}></Route>
-        </Route>
+        <Route path="/" element={<Home />} />
       </Routes>
     </BrowserRouter>
   );

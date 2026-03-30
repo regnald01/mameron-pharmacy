@@ -1,15 +1,39 @@
-import { Link } from "react-router-dom";
-import { useState } from "react";
-function Sidebar() {
-  const  [collapsed,setCollapsed] = useState(false);
+import { NavLink } from "react-router-dom";
+
+interface Props {
+  collapsed: boolean;
+}
+
+function Sidebar({ collapsed }: Props) {
   return (
     <div className={`sidebar ${collapsed ? "collapsed" : ""}`}>
-      <h2>{collapsed ? "PA" : "Pharmacy Admin"}</h2>
+      <h2>💊 {!collapsed && "Pharmacy"}</h2>
 
-      <Link to="/">🏠 {!collapsed && "Dashboard"}</Link>
-      <Link to="/orders">📦 {!collapsed && "Orders"}</Link>
-      <Link to="/products">💊 {!collapsed && "Products"}</Link>
-       <Link to="/Sales"> {!collapsed && "Sales"}</Link>
+      <ul className="menu">
+        <li>
+          <NavLink to="/" end>
+            🏠 {!collapsed && "Dashboard"}
+          </NavLink>
+        </li>
+
+        <li>
+          <NavLink to="/orders">
+            📦 {!collapsed && "Orders"}
+          </NavLink>
+        </li>
+
+        <li>
+          <NavLink to="/products">
+            💊 {!collapsed && "Products"}
+          </NavLink>
+        </li>
+
+        <li>
+          <NavLink to="/sales">
+            💰 {!collapsed && "Sales"}
+          </NavLink>
+        </li>
+      </ul>
     </div>
   );
 }

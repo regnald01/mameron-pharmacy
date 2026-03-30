@@ -1,15 +1,13 @@
-import { useState } from "react";
 
-function Navbar() {
- 
-  const  [toggleSidebar,setToggleSidebar]= useState(false);
+interface Props {
+  toggleSidebar: () => void;
+}
+
+function Navbar({ toggleSidebar }: Props) {
   return (
     <div className="navbar">
-      <button className="menu-btn">
-                ☰
-      </button>
-
-      <div>Welcome, Admin 👋</div>
+      <button onClick={toggleSidebar}>☰</button>
+      <h3>Welcome, Admin 👋</h3>
     </div>
   );
 }
