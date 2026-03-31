@@ -1,6 +1,5 @@
-
 import { useState } from "react";
-import type { ChangeEvent, FormEvent } from "react";
+import type { ChangeEvent, CSSProperties, FormEvent } from "react";
 
 interface Medicine {
   name: string;
@@ -17,17 +16,16 @@ function Medicines() {
     purchasePrice: "",
     sellingPrice: "",
     quantity: "",
-    expiryDate: ""
+    expiryDate: "",
   });
-
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
-  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setForm({ ...form, [event.target.name]: event.target.value });
   };
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
 
     if (editingIndex !== null) {
       const updated = [...medicines];
@@ -43,7 +41,7 @@ function Medicines() {
       purchasePrice: "",
       sellingPrice: "",
       quantity: "",
-      expiryDate: ""
+      expiryDate: "",
     });
   };
 
@@ -53,51 +51,46 @@ function Medicines() {
   };
 
   const handleDelete = (index: number) => {
-    const filtered = medicines.filter((_, i) => i !== index);
-    setMedicines(filtered);
+    setMedicines((current) => current.filter((_, itemIndex) => itemIndex !== index));
   };
 
   return (
-    <div>
-      <h2 style={{ marginBottom: "20px" }}>Medicine Management</h2>
+    <section className="panel panel--wide">
+      <p className="eyebrow">Inventory Control</p>
+      <h2>Medicine management</h2>
 
-      {/* FORM */}
       <form onSubmit={handleSubmit} style={formStyle}>
         <input
           name="name"
-          placeholder="Medicine Name"
+          placeholder="Medicine name"
           value={form.name}
           onChange={handleChange}
           required
         />
-
         <input
           name="purchasePrice"
           type="number"
-          placeholder="Purchase Price"
+          placeholder="Purchase price"
           value={form.purchasePrice}
           onChange={handleChange}
           required
         />
-
         <input
           name="sellingPrice"
           type="number"
-          placeholder="Selling Price"
+          placeholder="Selling price"
           value={form.sellingPrice}
           onChange={handleChange}
           required
         />
-
         <input
           name="quantity"
           type="number"
-          placeholder="Quantity"
+          placeholder="Stock quantity"
           value={form.quantity}
           onChange={handleChange}
           required
         />
-
         <input
           name="expiryDate"
           type="date"
@@ -105,65 +98,75 @@ function Medicines() {
           onChange={handleChange}
           required
         />
-
-        <button type="submit">
-          {editingIndex !== null ? "Update Medicine" : "Add Medicine"}
+        <button type="submit" className="button button--primary">
+          {editingIndex !== null ? "Update medicine" : "Add medicine"}
         </button>
       </form>
 
-      {/* TABLE */}
-      <table style={tableStyle}>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Purchase</th>
-            <th>Selling</th>
-            <th>Stock</th>
-            <th>Expiry</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {medicines.map((med, index) => (
-            <tr key={index}>
-              <td>{med.name}</td>
-              <td>{med.purchasePrice}</td>
-              <td>{med.sellingPrice}</td>
-              <td>{med.quantity}</td>
-              <td style={{ color: isExpired(med.expiryDate) ? "red" : "black" }}>
-                {med.expiryDate}
-              </td>
-              <td>
-                <button onClick={() => handleEdit(index)}>Edit</button>
-                <button onClick={() => handleDelete(index)}>Delete</button>
-              </td>
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Purchase</th>
+              <th>Selling</th>
+              <th>Stock</th>
+              <th>Expiry</th>
+              <th>Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {medicines.length === 0 ? (
+              <tr>
+                <td colSpan={6}>No medicines added yet.</td>
+              </tr>
+            ) : (
+              medicines.map((medicine, index) => (
+                <tr key={`${medicine.name}-${index}`}>
+                  <td>{medicine.name}</td>
+                  <td>{medicine.purchasePrice}</td>
+                  <td>{medicine.sellingPrice}</td>
+                  <td>{medicine.quantity}</td>
+                  <td style={{ color: isExpired(medicine.expiryDate) ? "#b91c1c" : "#334155" }}>
+                    {medicine.expiryDate}
+                  </td>
+                  <td>
+                    <div className="row-actions">
+                      <button
+                        type="button"
+                        className="button button--ghost"
+                        onClick={() => handleEdit(index)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="button button--ghost"
+                        onClick={() => handleDelete(index)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
-/* Expiry check */
 function isExpired(date: string): boolean {
   return new Date(date) < new Date();
 }
 
-/* Styles */
-const formStyle: React.CSSProperties = {
+const formStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(3, 1fr)",
-  gap: "10px",
-  marginBottom: "20px"
-};
-
-const tableStyle: React.CSSProperties = {
-  width: "100%",
-  background: "white",
-  borderRadius: "10px",
-  overflow: "hidden"
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: "12px",
+  margin: "20px 0 24px",
 };
 
 export default Medicines;

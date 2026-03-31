@@ -1,40 +1,47 @@
 import { NavLink } from "react-router-dom";
 
+import { roleConfig } from "../data/roleConfig";
+import type { AppRole } from "../types/roles";
+
 interface Props {
   collapsed: boolean;
+  role: AppRole;
 }
 
-function Sidebar({ collapsed }: Props) {
+function Sidebar({ collapsed, role }: Props) {
+  const currentRole = roleConfig[role];
+
   return (
-    <div className={`sidebar ${collapsed ? "collapsed" : ""}`}>
-      <h2>💊 {!collapsed && "Pharmacy"}</h2>
+    <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
+      <div className="sidebar__brand">
+        <span className="sidebar__logo">Rx</span>
+        {!collapsed && (
+          <div>
+            <strong>Mameron</strong>
+            <p>{currentRole.homeLabel}</p>
+          </div>
+        )}
+      </div>
 
-      <ul className="menu">
-        <li>
-          <NavLink to="/" end>
-            🏠 {!collapsed && "Dashboard"}
-          </NavLink>
-        </li>
+      <nav>
+        <ul className="menu">
+          {currentRole.navItems.map((item) => (
+            <li key={item.to}>
+              <NavLink to={item.to} end={item.to === "/"}>
+                <span className="menu__icon">{item.icon}</span>
+                {!collapsed && <span>{item.label}</span>}
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+      </nav>
 
-        <li>
-          <NavLink to="/orders">
-            📦 {!collapsed && "Orders"}
-          </NavLink>
-        </li>
-
-        <li>
-          <NavLink to="/products">
-            💊 {!collapsed && "Products"}
-          </NavLink>
-        </li>
-
-        <li>
-          <NavLink to="/sales">
-            💰 {!collapsed && "Sales"}
-          </NavLink>
-        </li>
-      </ul>
-    </div>
+      {!collapsed && (
+        <div className="sidebar__footer">
+          <p>{currentRole.description}</p>
+        </div>
+      )}
+    </aside>
   );
 }
 
