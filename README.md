@@ -21,7 +21,7 @@ React Frontend
       ↓
 Django REST API
       ↓
-PostgreSQL / MySQL
+PostgreSQL 
 ```
 
 ---
@@ -59,7 +59,7 @@ PostgreSQL / MySQL
 - React.js
 - Axios
 - React Router
-- TailwindCSS / CSS
+- TailwindCSS 
 
 ## Backend
 - Django
@@ -67,7 +67,7 @@ PostgreSQL / MySQL
 - Simple JWT Authentication
 
 ## Database
-- PostgreSQL / MySQL / SQLite
+- PostgreSQL 
 
 ---
 
