@@ -108,6 +108,7 @@ mameron-pharmacy/
 ## Login Page
 
 Modern secure login interface with role-based authentication.
+
 <img width="1911" height="882" alt="mame01" src="https://github.com/user-attachments/assets/b85cf712-762c-436c-833a-ea6456802b43" />
 
 
