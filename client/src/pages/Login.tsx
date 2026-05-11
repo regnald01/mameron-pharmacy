@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -10,11 +10,14 @@ import "./Login.css";
 
 function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login, user } = useAuth();
   const { showToast } = useToast();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<AppRole>("Admin");
+  const [role, setRole] = useState<AppRole>(
+    (searchParams.get("role") as AppRole | null) ?? "Admin"
+  );
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 

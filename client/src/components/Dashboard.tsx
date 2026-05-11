@@ -1,5 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import type { ChangeEvent, FormEvent } from "react";
+import { FiFileText, FiMail } from "react-icons/fi";
+import { FaWhatsapp } from "react-icons/fa";
+import { HiOutlineTableCells } from "react-icons/hi2";
 import { useOutletContext } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
@@ -25,6 +29,8 @@ type UserRole = AppRole;
 interface RoleOutletContext {
   role: AppRole;
 }
+
+const USERS_PER_PAGE = 6;
 
 function Dashboard() {
   const { role } = useOutletContext<RoleOutletContext>();
@@ -52,9 +58,15 @@ function AdminDashboard() {
   });
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<UserStatus | "All">("All");
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showInviteOptions, setShowInviteOptions] = useState(false);
+  const [showExportOptions, setShowExportOptions] = useState(false);
   const actor = user?.name ?? user?.email ?? "System";
+  const heroActionsRef = useRef<HTMLDivElement | null>(null);
+  const inviteFormRef = useRef<HTMLFormElement | null>(null);
+  const inviteNameInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadDashboard = useCallback(
     async (active = true) => {
@@ -94,6 +106,29 @@ function AdminDashboard() {
     };
   }, [loadDashboard]);
 
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (heroActionsRef.current?.contains(target)) {
+        return;
+      }
+
+      setShowInviteOptions(false);
+      setShowExportOptions(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, []);
+
   const visibleUsers = useMemo(() => {
     return users.filter((user) => {
       const matchesSearch =
@@ -105,6 +140,23 @@ function AdminDashboard() {
       return matchesSearch && matchesStatus;
     });
   }, [search, statusFilter, users]);
+
+  const totalPages = Math.max(1, Math.ceil(visibleUsers.length / USERS_PER_PAGE));
+
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * USERS_PER_PAGE;
+    return visibleUsers.slice(start, start + USERS_PER_PAGE);
+  }, [currentPage, visibleUsers]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const handleNewUserChange = (
     event: ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -179,6 +231,129 @@ function AdminDashboard() {
     }
   };
 
+  const focusInviteForm = () => {
+    setShowExportOptions(false);
+    setShowInviteOptions((current) => !current);
+  };
+
+  const buildInviteLink = () => {
+    const params = new URLSearchParams();
+    if (newUser.email) {
+      params.set("email", newUser.email);
+    }
+    if (newUser.role) {
+      params.set("role", newUser.role);
+    }
+
+    const query = params.toString();
+    return `${window.location.origin}/login${query ? `?${query}` : ""}`;
+  };
+
+  const shareInvite = (channel: "email" | "whatsapp") => {
+    if (!newUser.email || !newUser.role) {
+      inviteFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      inviteNameInputRef.current?.focus();
+      showToast("Enter at least email and role in the invite form first.", "info");
+      return;
+    }
+
+    const inviteLink = buildInviteLink();
+    const message = `You are invited to Mameron Pharmacy as ${newUser.role}. Sign in here: ${inviteLink}`;
+
+    if (channel === "email") {
+      const subject = encodeURIComponent("Mameron Pharmacy access invite");
+      const body = encodeURIComponent(`Hello,\n\n${message}\n\nTemporary password: ${newUser.password || "Set by admin separately."}`);
+      window.open(`mailto:${encodeURIComponent(newUser.email)}?subject=${subject}&body=${body}`, "_self");
+      showToast("Email invite opened.", "success");
+    } else {
+      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+      showToast("WhatsApp share opened.", "success");
+    }
+
+    setShowInviteOptions(false);
+  };
+
+  const exportActivity = () => {
+    setShowInviteOptions(false);
+    setShowExportOptions((current) => !current);
+  };
+
+  const exportActivityCsv = () => {
+    const headers = ["Actor", "Area", "Severity", "Action", "Time", "Reviewed"];
+    const rows = activities.map((activity) => [
+      activity.actor,
+      activity.area,
+      activity.severity,
+      activity.action,
+      activity.time,
+      activity.reviewed ? "Yes" : "No",
+    ]);
+
+    const csv = [headers, ...rows]
+      .map((row) =>
+        row
+          .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+          .join(",")
+      )
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `activity-log-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    setShowExportOptions(false);
+    showToast("Activity log exported successfully.", "success");
+  };
+
+  const exportActivityExcel = () => {
+    const rows = activities
+      .map(
+        (activity) => `
+          <tr>
+            <td>${escapeHtml(activity.actor)}</td>
+            <td>${escapeHtml(activity.area)}</td>
+            <td>${escapeHtml(activity.severity)}</td>
+            <td>${escapeHtml(activity.action)}</td>
+            <td>${escapeHtml(activity.time)}</td>
+            <td>${activity.reviewed ? "Yes" : "No"}</td>
+          </tr>
+        `
+      )
+      .join("");
+
+    const table = `
+      <table>
+        <thead>
+          <tr>
+            <th>Actor</th>
+            <th>Area</th>
+            <th>Severity</th>
+            <th>Action</th>
+            <th>Time</th>
+            <th>Reviewed</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+
+    const blob = new Blob([table], {
+      type: "application/vnd.ms-excel;charset=utf-8;",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `activity-log-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    setShowExportOptions(false);
+    showToast("Activity log exported as Excel.", "success");
+  };
+
   if (loading) {
     return (
       <section className="dashboard-page">
@@ -198,11 +373,54 @@ function AdminDashboard() {
   return (
     <section className="dashboard-page">
       <Hero
+        actionsRef={heroActionsRef}
         eyebrow="System Overview"
         title="Admin dashboard for all users and all system activity"
         text="Admins can see every staff account, review high-risk events, and manage access from one central dashboard."
         primaryAction="Invite user"
         secondaryAction="Export activity"
+        onPrimaryAction={focusInviteForm}
+        onSecondaryAction={exportActivity}
+        primaryMenu={
+          showInviteOptions ? (
+            <div className="hero-action-menu">
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={() => shareInvite("email")}
+              >
+                <FiMail aria-hidden="true" /> Share by Email
+              </button>
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={() => shareInvite("whatsapp")}
+              >
+                <FaWhatsapp aria-hidden="true" /> Share on WhatsApp
+              </button>
+            </div>
+          ) : null
+        }
+        secondaryMenu={
+          showExportOptions ? (
+            <div className="hero-action-menu">
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={exportActivityExcel}
+              >
+                <HiOutlineTableCells aria-hidden="true" /> Export Excel
+              </button>
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={exportActivityCsv}
+              >
+                <FiFileText aria-hidden="true" /> Export CSV
+              </button>
+            </div>
+          ) : null
+        }
       />
 
       <StatsGrid items={stats} />
@@ -235,8 +453,9 @@ function AdminDashboard() {
             </div>
           </div>
 
-          <form onSubmit={handleCreateUser} className="toolbar">
+          <form ref={inviteFormRef} onSubmit={handleCreateUser} className="toolbar">
             <input
+              ref={inviteNameInputRef}
               name="name"
               value={newUser.name}
               onChange={handleNewUserChange}
@@ -287,7 +506,7 @@ function AdminDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {visibleUsers.map((user) => (
+                {paginatedUsers.map((user) => (
                   <tr key={user.id}>
                     <td>
                       <div className="user-cell">
@@ -348,6 +567,32 @@ function AdminDashboard() {
               </tbody>
             </table>
           </div>
+
+          {visibleUsers.length > 0 ? (
+            <div className="pagination-actions">
+              <span>
+                Page {currentPage} of {totalPages}
+              </span>
+              <div className="row-actions">
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <section className="panel">
@@ -546,14 +791,30 @@ function GenericRoleDashboard({
 }
 
 interface HeroProps {
+  actionsRef?: React.RefObject<HTMLDivElement | null>;
   eyebrow: string;
   title: string;
   text: string;
   primaryAction: string;
   secondaryAction: string;
+  onPrimaryAction?: () => void;
+  onSecondaryAction?: () => void;
+  primaryMenu?: ReactNode;
+  secondaryMenu?: ReactNode;
 }
 
-function Hero({ eyebrow, title, text, primaryAction, secondaryAction }: HeroProps) {
+function Hero({
+  actionsRef,
+  eyebrow,
+  title,
+  text,
+  primaryAction,
+  secondaryAction,
+  onPrimaryAction,
+  onSecondaryAction,
+  primaryMenu,
+  secondaryMenu,
+}: HeroProps) {
   return (
     <div className="dashboard-hero">
       <div>
@@ -561,16 +822,31 @@ function Hero({ eyebrow, title, text, primaryAction, secondaryAction }: HeroProp
         <h2>{title}</h2>
         <p className="dashboard-hero__text">{text}</p>
       </div>
-      <div className="dashboard-hero__actions">
-        <button type="button" className="button button--primary">
-          {primaryAction}
-        </button>
-        <button type="button" className="button button--secondary">
-          {secondaryAction}
-        </button>
+      <div ref={actionsRef} className="dashboard-hero__actions">
+        <div className="hero-action-group">
+          <button type="button" className="button button--primary" onClick={onPrimaryAction}>
+            {primaryAction}
+          </button>
+          {primaryMenu}
+        </div>
+        <div className="hero-action-group">
+          <button type="button" className="button button--secondary" onClick={onSecondaryAction}>
+            {secondaryAction}
+          </button>
+          {secondaryMenu}
+        </div>
       </div>
     </div>
   );
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function StatsGrid({ items }: { items: DashboardStat[] }) {

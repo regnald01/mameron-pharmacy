@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
+import { FiFileText } from "react-icons/fi";
+import { HiOutlineTableCells } from "react-icons/hi2";
 
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -15,6 +17,7 @@ type OrderStatus = OrderRecord["status"];
 type OrderPriority = OrderRecord["priority"];
 
 type OrderForm = Omit<OrderRecord, "id">;
+const ORDERS_PER_PAGE = 6;
 
 const emptyForm: OrderForm = {
   customerName: "",
@@ -38,38 +41,69 @@ function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "All">("All");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showExportOptions, setShowExportOptions] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const heroActionsRef = useRef<HTMLDivElement | null>(null);
+  const orderQueueRef = useRef<HTMLElement | null>(null);
 
-  useEffect(() => {
-    let active = true;
+  const loadOrders = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!options?.silent) {
+        setLoading(true);
+      }
 
-    const loadOrders = async () => {
       try {
         const data = await fetchOrders();
-        if (!active) {
-          return;
-        }
-
         setOrders(data.orders);
         setStats(data.stats);
         setError(null);
       } catch {
-        if (!active) {
-          return;
-        }
-
         setError("Unable to load orders right now.");
         showToast("Unable to load orders right now.", "error");
       } finally {
-        if (active) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
+    },
+    [showToast]
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    const syncOrders = async () => {
+      if (!active) {
+        return;
+      }
+
+      await loadOrders();
     };
 
-    void loadOrders();
+    void syncOrders();
 
     return () => {
       active = false;
+    };
+  }, [loadOrders]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (heroActionsRef.current?.contains(target)) {
+        return;
+      }
+
+      setShowExportOptions(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
     };
   }, []);
 
@@ -86,6 +120,23 @@ function OrdersPage() {
     });
   }, [orders, search, statusFilter]);
 
+  const totalPages = Math.max(1, Math.ceil(visibleOrders.length / ORDERS_PER_PAGE));
+
+  const paginatedOrders = useMemo(() => {
+    const start = (currentPage - 1) * ORDERS_PER_PAGE;
+    return visibleOrders.slice(start, start + ORDERS_PER_PAGE);
+  }, [currentPage, visibleOrders]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
   const handleChange = (
     event: ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -98,10 +149,9 @@ function OrdersPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
-      const createdOrder = await createOrder(form, actor);
-      setOrders((current) => [createdOrder, ...current]);
+      await createOrder(form, actor);
+      await loadOrders({ silent: true });
       setForm(emptyForm);
-      setStats((current) => recalculateOrderStats([createdOrder, ...orders], current));
       showToast("Order created successfully.", "success");
     } catch {
       showToast("Unable to create order right now.", "error");
@@ -110,10 +160,8 @@ function OrdersPage() {
 
   const handleStatusChange = async (id: number, status: OrderStatus) => {
     try {
-      const nextOrder = await updateOrder(id, { status }, actor);
-      const nextOrders = orders.map((order) => (order.id === id ? nextOrder : order));
-      setOrders(nextOrders);
-      setStats((current) => recalculateOrderStats(nextOrders, current));
+      await updateOrder(id, { status }, actor);
+      await loadOrders({ silent: true });
       showToast("Order status updated successfully.", "success");
     } catch {
       showToast("Unable to update order status right now.", "error");
@@ -122,8 +170,8 @@ function OrdersPage() {
 
   const handlePriorityChange = async (id: number, priority: OrderPriority) => {
     try {
-      const nextOrder = await updateOrder(id, { priority }, actor);
-      setOrders((current) => current.map((order) => (order.id === id ? nextOrder : order)));
+      await updateOrder(id, { priority }, actor);
+      await loadOrders({ silent: true });
       showToast("Order priority updated successfully.", "success");
     } catch {
       showToast("Unable to update order priority right now.", "error");
@@ -133,13 +181,123 @@ function OrdersPage() {
   const handleDelete = async (id: number) => {
     try {
       await deleteOrder(id, actor);
-      const nextOrders = orders.filter((order) => order.id !== id);
-      setOrders(nextOrders);
-      setStats((current) => recalculateOrderStats(nextOrders, current));
+      await loadOrders({ silent: true });
       showToast("Order removed successfully.", "info");
     } catch {
       showToast("Unable to remove order right now.", "error");
     }
+  };
+
+  const handleReviewQueue = () => {
+    setSearch("");
+    setStatusFilter("Pending");
+    setShowExportOptions(false);
+    orderQueueRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    showToast("Showing pending orders in the review queue.", "info");
+  };
+
+  const toggleExportOrders = () => {
+    setShowExportOptions((current) => !current);
+  };
+
+  const exportOrdersCsv = () => {
+    if (visibleOrders.length === 0) {
+      showToast("There are no orders to export.", "info");
+      return;
+    }
+
+    const headers = [
+      "Customer",
+      "Prescription",
+      "Medicine",
+      "Quantity",
+      "Priority",
+      "Status",
+      "Assigned To",
+      "Created",
+    ];
+    const rows = visibleOrders.map((order) => [
+      order.customerName,
+      order.prescriptionCode,
+      order.medicineName,
+      order.quantity,
+      order.priority,
+      order.status,
+      order.assignedTo,
+      order.createdAtLabel,
+    ]);
+
+    const csv = [headers, ...rows]
+      .map((row) =>
+        row
+          .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+          .join(",")
+      )
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    setShowExportOptions(false);
+    showToast("Orders exported successfully.", "success");
+  };
+
+  const exportOrdersExcel = () => {
+    if (visibleOrders.length === 0) {
+      showToast("There are no orders to export.", "info");
+      return;
+    }
+
+    const rows = visibleOrders
+      .map(
+        (order) => `
+          <tr>
+            <td>${escapeHtml(order.customerName)}</td>
+            <td>${escapeHtml(order.prescriptionCode)}</td>
+            <td>${escapeHtml(order.medicineName)}</td>
+            <td>${escapeHtml(order.quantity)}</td>
+            <td>${escapeHtml(order.priority)}</td>
+            <td>${escapeHtml(order.status)}</td>
+            <td>${escapeHtml(order.assignedTo)}</td>
+            <td>${escapeHtml(order.createdAtLabel)}</td>
+          </tr>
+        `
+      )
+      .join("");
+
+    const table = `
+      <table>
+        <thead>
+          <tr>
+            <th>Customer</th>
+            <th>Prescription</th>
+            <th>Medicine</th>
+            <th>Quantity</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th>Assigned To</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+
+    const blob = new Blob([table], {
+      type: "application/vnd.ms-excel;charset=utf-8;",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `orders-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    setShowExportOptions(false);
+    showToast("Orders exported as Excel.", "success");
   };
 
   if (loading) {
@@ -161,13 +319,43 @@ function OrdersPage() {
             progress visible from one workspace.
           </p>
         </div>
-        <div className="dashboard-hero__actions">
-          <button type="button" className="button button--primary">
-            Review queue
-          </button>
-          <button type="button" className="button button--secondary">
-            Export orders
-          </button>
+        <div ref={heroActionsRef} className="dashboard-hero__actions">
+          <div className="hero-action-group">
+            <button
+              type="button"
+              className="button button--primary"
+              onClick={handleReviewQueue}
+            >
+              Review queue
+            </button>
+          </div>
+          <div className="hero-action-group">
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={toggleExportOrders}
+            >
+              Export orders
+            </button>
+            {showExportOptions ? (
+              <div className="hero-action-menu">
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={exportOrdersExcel}
+                >
+                  <HiOutlineTableCells aria-hidden="true" /> Export Excel
+                </button>
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={exportOrdersCsv}
+                >
+                  <FiFileText aria-hidden="true" /> Export CSV
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -181,7 +369,7 @@ function OrdersPage() {
         ))}
       </div>
 
-      <section className="panel panel--wide">
+      <section ref={orderQueueRef} className="panel panel--wide">
         <div className="panel__header">
           <div>
             <p className="eyebrow">New Order</p>
@@ -281,12 +469,12 @@ function OrdersPage() {
               </tr>
             </thead>
             <tbody>
-              {visibleOrders.length === 0 ? (
+              {paginatedOrders.length === 0 ? (
                 <tr>
                   <td colSpan={8}>No matching orders found.</td>
                 </tr>
               ) : (
-                visibleOrders.map((order) => (
+                paginatedOrders.map((order) => (
                   <tr key={order.id}>
                     <td>
                       <strong>{order.customerName}</strong>
@@ -342,46 +530,44 @@ function OrdersPage() {
             </tbody>
           </table>
         </div>
+
+        {visibleOrders.length > 0 ? (
+          <div className="pagination-actions">
+            <span>
+              Page {currentPage} of {totalPages}
+            </span>
+            <div className="row-actions">
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
     </section>
   );
 }
 
-function recalculateOrderStats(
-  orders: OrderRecord[],
-  currentStats: DashboardStat[]
-): DashboardStat[] {
-  if (currentStats.length === 0) {
-    return currentStats;
-  }
-
-  const pending = orders.filter((order) => order.status === "Pending").length;
-  const inTransit = orders.filter((order) => order.status === "In Transit").length;
-  const delivered = orders.filter((order) => order.status === "Delivered").length;
-  const issues = orders.filter((order) => order.status === "Issue").length;
-
-  return [
-    {
-      label: "Open orders",
-      value: String(orders.length),
-      description: `${pending} waiting for review or action`,
-    },
-    {
-      label: "In transit",
-      value: String(inTransit),
-      description: "Orders currently moving to pickup or delivery",
-    },
-    {
-      label: "Delivered",
-      value: String(delivered),
-      description: "Orders completed successfully in the current list",
-    },
-    {
-      label: "Needs attention",
-      value: String(issues),
-      description: "Orders flagged with delivery or prescription issues",
-    },
-  ];
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 export default OrdersPage;

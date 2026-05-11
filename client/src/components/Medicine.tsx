@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChangeEvent, CSSProperties, FormEvent } from "react";
 
 import { useAuth } from "../context/AuthContext";
@@ -12,6 +12,7 @@ import {
 import type { MedicineRecord } from "../lib/api";
 
 type MedicineForm = Omit<MedicineRecord, "id">;
+const MEDICINES_PER_PAGE = 6;
 
 const emptyForm: MedicineForm = {
   name: "",
@@ -30,39 +31,79 @@ function Medicines() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showExpiredOnly, setShowExpiredOnly] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const loadMedicines = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!options?.silent) {
+        setLoading(true);
+      }
+
+      try {
+        const data = await fetchMedicines();
+        setMedicines(data);
+        setError(null);
+      } catch {
+        setError("Unable to load medicines right now.");
+        showToast("Unable to load medicines right now.", "error");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [showToast]
+  );
 
   useEffect(() => {
     let active = true;
 
-    const loadMedicines = async () => {
-      try {
-        const data = await fetchMedicines();
-        if (!active) {
-          return;
-        }
-
-        setMedicines(data);
-        setError(null);
-      } catch {
-        if (!active) {
-          return;
-        }
-
-        setError("Unable to load medicines right now.");
-        showToast("Unable to load medicines right now.", "error");
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
+    const syncMedicines = async () => {
+      if (!active) {
+        return;
       }
+
+      await loadMedicines();
     };
 
-    void loadMedicines();
+    void syncMedicines();
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [loadMedicines]);
+
+  const expiredCount = useMemo(
+    () => medicines.filter((medicine) => isExpired(medicine.expiryDate)).length,
+    [medicines]
+  );
+
+  const visibleMedicines = useMemo(() => {
+    if (!showExpiredOnly) {
+      return medicines;
+    }
+
+    return medicines.filter((medicine) => isExpired(medicine.expiryDate));
+  }, [medicines, showExpiredOnly]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(visibleMedicines.length / MEDICINES_PER_PAGE)
+  );
+
+  const paginatedMedicines = useMemo(() => {
+    const start = (currentPage - 1) * MEDICINES_PER_PAGE;
+    return visibleMedicines.slice(start, start + MEDICINES_PER_PAGE);
+  }, [currentPage, visibleMedicines]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [showExpiredOnly]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [event.target.name]: event.target.value });
@@ -73,17 +114,13 @@ function Medicines() {
 
     try {
       if (editingId !== null) {
-        const updatedMedicine = await updateMedicine(editingId, form, actor);
-        setMedicines((current) =>
-          current.map((medicine) =>
-            medicine.id === editingId ? updatedMedicine : medicine
-          )
-        );
+        await updateMedicine(editingId, form, actor);
+        await loadMedicines({ silent: true });
         setEditingId(null);
         showToast("Medicine updated successfully.", "success");
       } else {
-        const createdMedicine = await createMedicine(form, actor);
-        setMedicines((current) => [...current, createdMedicine]);
+        await createMedicine(form, actor);
+        await loadMedicines({ silent: true });
         showToast("Medicine added successfully.", "success");
       }
 
@@ -107,11 +144,15 @@ function Medicines() {
   const handleDelete = async (id: number) => {
     try {
       await deleteMedicine(id, actor);
-      setMedicines((current) => current.filter((medicine) => medicine.id !== id));
+      await loadMedicines({ silent: true });
       showToast("Medicine deleted successfully.", "info");
     } catch {
       showToast("Unable to delete medicine right now.", "error");
     }
+  };
+
+  const toggleExpiredFilter = () => {
+    setShowExpiredOnly((current) => !current);
   };
 
   if (loading) {
@@ -124,8 +165,20 @@ function Medicines() {
 
   return (
     <section className="panel panel--wide">
-      <p className="eyebrow">Inventory Control</p>
-      <h2>Medicine management</h2>
+      <div className="panel__header">
+        <div>
+          <p className="eyebrow">Inventory Control</p>
+          <h2>Medicine management</h2>
+        </div>
+        <button
+          type="button"
+          className={`button ${showExpiredOnly ? "button--primary" : "button--secondary"} notification-button`}
+          onClick={toggleExpiredFilter}
+        >
+          Expired items
+          <span className="notification-button__count">{expiredCount}</span>
+        </button>
+      </div>
 
       <form onSubmit={handleSubmit} style={formStyle}>
         <input
@@ -184,12 +237,16 @@ function Medicines() {
             </tr>
           </thead>
           <tbody>
-            {medicines.length === 0 ? (
+            {paginatedMedicines.length === 0 ? (
               <tr>
-                <td colSpan={6}>No medicines added yet.</td>
+                <td colSpan={6}>
+                  {showExpiredOnly
+                    ? "No expired medicines found."
+                    : "No medicines added yet."}
+                </td>
               </tr>
             ) : (
-              medicines.map((medicine) => (
+              paginatedMedicines.map((medicine) => (
                 <tr key={medicine.id}>
                   <td>{medicine.name}</td>
                   <td>{medicine.purchasePrice}</td>
@@ -222,6 +279,32 @@ function Medicines() {
           </tbody>
         </table>
       </div>
+
+      {visibleMedicines.length > 0 ? (
+        <div className="pagination-actions">
+          <span>
+            Page {currentPage} of {totalPages}
+          </span>
+          <div className="row-actions">
+            <button
+              type="button"
+              className="button button--ghost"
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              className="button button--ghost"
+              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

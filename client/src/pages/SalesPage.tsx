@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
+import jsPDF from "jspdf";
+import { FiFileText } from "react-icons/fi";
+import { HiOutlineTableCells } from "react-icons/hi2";
 
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -14,6 +17,7 @@ import type { DashboardStat, SaleRecord } from "../lib/api";
 type SaleStatus = SaleRecord["status"];
 type PaymentMethod = SaleRecord["paymentMethod"];
 type SaleForm = Omit<SaleRecord, "id">;
+const SALES_PER_PAGE = 6;
 
 const emptyForm: SaleForm = {
   customerName: "",
@@ -38,38 +42,68 @@ function SalesPage() {
   const [statusFilter, setStatusFilter] = useState<SaleStatus | "All">("All");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showExportOptions, setShowExportOptions] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const heroActionsRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    let active = true;
+  const loadSales = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!options?.silent) {
+        setLoading(true);
+      }
 
-    const loadSales = async () => {
       try {
         const data = await fetchSales();
-        if (!active) {
-          return;
-        }
-
         setSales(data.sales);
         setStats(data.stats);
         setError(null);
       } catch {
-        if (!active) {
-          return;
-        }
-
         setError("Unable to load sales right now.");
         showToast("Unable to load sales right now.", "error");
       } finally {
-        if (active) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
+    },
+    [showToast]
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    const syncSales = async () => {
+      if (!active) {
+        return;
+      }
+
+      await loadSales();
     };
 
-    void loadSales();
+    void syncSales();
 
     return () => {
       active = false;
+    };
+  }, [loadSales]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (heroActionsRef.current?.contains(target)) {
+        return;
+      }
+
+      setShowExportOptions(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
     };
   }, []);
 
@@ -87,6 +121,23 @@ function SalesPage() {
     });
   }, [sales, search, statusFilter]);
 
+  const totalPages = Math.max(1, Math.ceil(visibleSales.length / SALES_PER_PAGE));
+
+  const paginatedSales = useMemo(() => {
+    const start = (currentPage - 1) * SALES_PER_PAGE;
+    return visibleSales.slice(start, start + SALES_PER_PAGE);
+  }, [currentPage, visibleSales]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
   const handleChange = (
     event: ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -99,10 +150,8 @@ function SalesPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
-      const createdSale = await createSale(form, actor);
-      const nextSales = [createdSale, ...sales];
-      setSales(nextSales);
-      setStats(recalculateSaleStats(nextSales));
+      await createSale(form, actor);
+      await loadSales({ silent: true });
       setForm(emptyForm);
       showToast("Sale recorded successfully.", "success");
     } catch {
@@ -112,10 +161,8 @@ function SalesPage() {
 
   const handleStatusChange = async (id: number, status: SaleStatus) => {
     try {
-      const nextSale = await updateSale(id, { status }, actor);
-      const nextSales = sales.map((sale) => (sale.id === id ? nextSale : sale));
-      setSales(nextSales);
-      setStats(recalculateSaleStats(nextSales));
+      await updateSale(id, { status }, actor);
+      await loadSales({ silent: true });
       showToast("Sale status updated successfully.", "success");
     } catch {
       showToast("Unable to update sale status right now.", "error");
@@ -124,8 +171,8 @@ function SalesPage() {
 
   const handlePaymentChange = async (id: number, paymentMethod: PaymentMethod) => {
     try {
-      const nextSale = await updateSale(id, { paymentMethod }, actor);
-      setSales((current) => current.map((sale) => (sale.id === id ? nextSale : sale)));
+      await updateSale(id, { paymentMethod }, actor);
+      await loadSales({ silent: true });
       showToast("Payment method updated successfully.", "success");
     } catch {
       showToast("Unable to update payment method right now.", "error");
@@ -135,13 +182,288 @@ function SalesPage() {
   const handleDelete = async (id: number) => {
     try {
       await deleteSale(id, actor);
-      const nextSales = sales.filter((sale) => sale.id !== id);
-      setSales(nextSales);
-      setStats(recalculateSaleStats(nextSales));
+      await loadSales({ silent: true });
       showToast("Sale removed successfully.", "info");
     } catch {
       showToast("Unable to remove sale right now.", "error");
     }
+  };
+
+  const handleShiftTotals = () => {
+    const completedSales = visibleSales.filter((sale) => sale.status === "Completed");
+    const totalRevenue = completedSales.reduce(
+      (sum, sale) => sum + Number(sale.totalAmount),
+      0
+    );
+    const pendingCount = visibleSales.filter((sale) => sale.status === "Pending").length;
+    const refundedCount = visibleSales.filter((sale) => sale.status === "Refunded").length;
+
+    setShowExportOptions(false);
+    showToast(
+      `Shift totals: ${completedSales.length} completed, $${totalRevenue.toFixed(2)} revenue, ${pendingCount} pending, ${refundedCount} refunded.`,
+      "info"
+    );
+  };
+
+  const toggleExportLedger = () => {
+    setShowExportOptions((current) => !current);
+  };
+
+  const exportLedgerCsv = () => {
+    if (visibleSales.length === 0) {
+      showToast("There are no sales to export.", "info");
+      return;
+    }
+
+    const headers = [
+      "Customer",
+      "Invoice",
+      "Medicine",
+      "Units",
+      "Amount",
+      "Payment",
+      "Status",
+      "Cashier",
+      "Sold",
+    ];
+    const rows = visibleSales.map((sale) => [
+      sale.customerName,
+      sale.invoiceCode,
+      sale.medicineName,
+      sale.units,
+      sale.totalAmount,
+      sale.paymentMethod,
+      sale.status,
+      sale.cashierName,
+      sale.soldAtLabel,
+    ]);
+
+    downloadCsv(`sales-ledger-${getTodayLabel()}.csv`, [headers, ...rows]);
+    setShowExportOptions(false);
+    showToast("Sales ledger exported successfully.", "success");
+  };
+
+  const exportLedgerExcel = () => {
+    if (visibleSales.length === 0) {
+      showToast("There are no sales to export.", "info");
+      return;
+    }
+
+    const rows = visibleSales
+      .map(
+        (sale) => `
+          <tr>
+            <td>${escapeHtml(sale.customerName)}</td>
+            <td>${escapeHtml(sale.invoiceCode)}</td>
+            <td>${escapeHtml(sale.medicineName)}</td>
+            <td>${escapeHtml(sale.units)}</td>
+            <td>${escapeHtml(sale.totalAmount)}</td>
+            <td>${escapeHtml(sale.paymentMethod)}</td>
+            <td>${escapeHtml(sale.status)}</td>
+            <td>${escapeHtml(sale.cashierName)}</td>
+            <td>${escapeHtml(sale.soldAtLabel)}</td>
+          </tr>
+        `
+      )
+      .join("");
+
+    downloadExcel(
+      `sales-ledger-${getTodayLabel()}.xls`,
+      `
+        <table>
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Invoice</th>
+              <th>Medicine</th>
+              <th>Units</th>
+              <th>Amount</th>
+              <th>Payment</th>
+              <th>Status</th>
+              <th>Cashier</th>
+              <th>Sold</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `
+    );
+    setShowExportOptions(false);
+    showToast("Sales ledger exported as Excel.", "success");
+  };
+
+  const generateInvoiceReport = () => {
+    if (visibleSales.length === 0) {
+      showToast("There are no invoice records to report.", "info");
+      return;
+    }
+
+    setShowExportOptions(false);
+    const pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "pt",
+      format: "a4",
+    });
+
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 40;
+    const contentWidth = pageWidth - margin * 2;
+    const generatedAt = new Date().toLocaleString();
+    const completedSales = visibleSales.filter((sale) => sale.status === "Completed");
+    const totalRevenue = completedSales.reduce(
+      (sum, sale) => sum + Number(sale.totalAmount),
+      0
+    );
+    const averageSale =
+      completedSales.length === 0 ? 0 : totalRevenue / completedSales.length;
+    const refundedCount = visibleSales.filter((sale) => sale.status === "Refunded").length;
+    let y = 0;
+
+    const drawHeader = (isFirstPage: boolean) => {
+      pdf.setFillColor(15, 118, 110);
+      pdf.rect(0, 0, pageWidth, 112, "F");
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(22);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text("Invoice Report", margin, 44);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(10);
+      pdf.setTextColor(223, 242, 240);
+      pdf.text("Mameron Pharmacy Sales Ledger", margin, 64);
+      pdf.text(`Generated ${generatedAt}`, margin, 80);
+
+      pdf.setFillColor(255, 255, 255);
+      pdf.roundedRect(pageWidth - 160, 28, 120, 54, 16, 16, "F");
+      pdf.setTextColor(15, 23, 42);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(11);
+      pdf.text(`${visibleSales.length} invoices`, pageWidth - 145, 50);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+      pdf.text("Current filtered report", pageWidth - 145, 66);
+
+      y = 138;
+
+      if (isFirstPage) {
+        const cardWidth = (contentWidth - 24) / 3;
+        const cards = [
+          {
+            label: "Completed Revenue",
+            value: formatCurrency(totalRevenue),
+            tone: [14, 165, 233] as const,
+          },
+          {
+            label: "Average Sale",
+            value: formatCurrency(averageSale),
+            tone: [245, 158, 11] as const,
+          },
+          {
+            label: "Refunded",
+            value: String(refundedCount),
+            tone: [239, 68, 68] as const,
+          },
+        ];
+
+        cards.forEach((card, index) => {
+          const x = margin + index * (cardWidth + 12);
+          pdf.setFillColor(248, 250, 252);
+          pdf.setDrawColor(226, 232, 240);
+          pdf.roundedRect(x, y, cardWidth, 62, 16, 16, "FD");
+          pdf.setFillColor(card.tone[0], card.tone[1], card.tone[2]);
+          pdf.roundedRect(x + 14, y + 14, 8, 34, 4, 4, "F");
+          pdf.setTextColor(71, 85, 105);
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(9);
+          pdf.text(card.label, x + 32, y + 25);
+          pdf.setTextColor(15, 23, 42);
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(14);
+          pdf.text(card.value, x + 32, y + 45);
+        });
+
+        y += 86;
+      }
+
+      pdf.setTextColor(15, 23, 42);
+    };
+
+    drawHeader(true);
+
+    visibleSales.forEach((sale) => {
+      const cardHeight = 122;
+
+      if (y + cardHeight > pageHeight - 48) {
+        pdf.addPage();
+        drawHeader(false);
+      }
+
+      pdf.setFillColor(255, 255, 255);
+      pdf.setDrawColor(226, 232, 240);
+      pdf.roundedRect(margin, y, contentWidth, cardHeight, 18, 18, "FD");
+
+      pdf.setFillColor(15, 118, 110);
+      pdf.roundedRect(margin, y, contentWidth, 30, 18, 18, "F");
+      pdf.rect(margin, y + 14, contentWidth, 16, "F");
+
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(12);
+      pdf.text(`Invoice ${sale.invoiceCode}`, margin + 18, y + 20);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+      pdf.text(sale.soldAtLabel, pageWidth - margin - 18, y + 20, {
+        align: "right",
+      });
+
+      pdf.setTextColor(15, 23, 42);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(10);
+      pdf.text("Customer", margin + 18, y + 50);
+      pdf.text("Medicine", margin + 210, y + 50);
+      pdf.text("Amount", margin + 402, y + 50);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(10);
+      pdf.text(
+        pdf.splitTextToSize(sale.customerName, 150),
+        margin + 18,
+        y + 66
+      );
+      pdf.text(
+        pdf.splitTextToSize(sale.medicineName, 150),
+        margin + 210,
+        y + 66
+      );
+      pdf.setFont("helvetica", "bold");
+      pdf.text(formatCurrency(Number(sale.totalAmount)), margin + 402, y + 66);
+
+      pdf.setDrawColor(226, 232, 240);
+      pdf.line(margin + 18, y + 82, pageWidth - margin - 18, y + 82);
+
+      const footerItems = [
+        `Units: ${sale.units}`,
+        `Payment: ${sale.paymentMethod}`,
+        `Status: ${sale.status}`,
+        `Cashier: ${sale.cashierName}`,
+      ];
+
+      footerItems.forEach((item, index) => {
+        const x = margin + 18 + index * 130;
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(9);
+        pdf.setTextColor(71, 85, 105);
+        pdf.text(item, x, y + 102);
+      });
+
+      y += cardHeight + 14;
+    });
+
+    pdf.save(`invoice-report-${getTodayLabel()}.pdf`);
+    showToast("Invoice report generated as PDF.", "success");
   };
 
   if (loading) {
@@ -163,13 +485,52 @@ function SalesPage() {
             exceptions visible from the cashier and admin workspace.
           </p>
         </div>
-        <div className="dashboard-hero__actions">
-          <button type="button" className="button button--primary">
-            Shift totals
-          </button>
-          <button type="button" className="button button--secondary">
-            Export ledger
-          </button>
+        <div ref={heroActionsRef} className="dashboard-hero__actions">
+          <div className="hero-action-group">
+            <button
+              type="button"
+              className="button button--primary"
+              onClick={handleShiftTotals}
+            >
+              Shift totals
+            </button>
+          </div>
+          <div className="hero-action-group">
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={toggleExportLedger}
+            >
+              Export ledger
+            </button>
+            {showExportOptions ? (
+              <div className="hero-action-menu">
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={exportLedgerExcel}
+                >
+                  <HiOutlineTableCells aria-hidden="true" /> Export Excel
+                </button>
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={exportLedgerCsv}
+                >
+                  <FiFileText aria-hidden="true" /> Export CSV
+                </button>
+              </div>
+            ) : null}
+          </div>
+          <div className="hero-action-group">
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={generateInvoiceReport}
+            >
+              Invoice report
+            </button>
+          </div>
         </div>
       </div>
 
@@ -293,12 +654,12 @@ function SalesPage() {
               </tr>
             </thead>
             <tbody>
-              {visibleSales.length === 0 ? (
+              {paginatedSales.length === 0 ? (
                 <tr>
                   <td colSpan={9}>No matching sales found.</td>
                 </tr>
               ) : (
-                visibleSales.map((sale) => (
+                paginatedSales.map((sale) => (
                   <tr key={sale.id}>
                     <td>
                       <strong>{sale.customerName}</strong>
@@ -354,44 +715,82 @@ function SalesPage() {
             </tbody>
           </table>
         </div>
+
+        {visibleSales.length > 0 ? (
+          <div className="pagination-actions">
+            <span>
+              Page {currentPage} of {totalPages}
+            </span>
+            <div className="row-actions">
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
     </section>
   );
 }
 
-function recalculateSaleStats(sales: SaleRecord[]): DashboardStat[] {
-  const completedSales = sales.filter((sale) => sale.status === "Completed");
-  const totalRevenue = completedSales.reduce(
-    (sum, sale) => sum + Number(sale.totalAmount),
-    0
-  );
-  const exceptions = sales.filter(
-    (sale) => sale.status === "Pending" || sale.status === "Refunded"
-  ).length;
-  const averageSale = completedSales.length === 0 ? 0 : totalRevenue / completedSales.length;
+function downloadCsv(filename: string, rows: Array<Array<string>>) {
+  const csv = rows
+    .map((row) =>
+      row
+        .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+        .join(",")
+    )
+    .join("\n");
 
-  return [
-    {
-      label: "Revenue",
-      value: `$${totalRevenue.toFixed(2)}`,
-      description: "Completed sales total across the current ledger",
-    },
-    {
-      label: "Transactions",
-      value: String(sales.length),
-      description: "All recorded checkout events in the current list",
-    },
-    {
-      label: "Average sale",
-      value: `$${averageSale.toFixed(2)}`,
-      description: "Average value of completed sales",
-    },
-    {
-      label: "Exceptions",
-      value: String(exceptions),
-      description: "Pending or refunded sales needing review",
-    },
-  ];
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.URL.revokeObjectURL(url);
+}
+
+function downloadExcel(filename: string, table: string) {
+  const blob = new Blob([table], {
+    type: "application/vnd.ms-excel;charset=utf-8;",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.URL.revokeObjectURL(url);
+}
+
+function getTodayLabel() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatCurrency(value: number) {
+  return `$${value.toFixed(2)}`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 export default SalesPage;
