@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { useOutletContext } from "react-router-dom";
 
+import { useToast } from "../context/ToastContext";
 import {
   createUser,
   deleteUser,
@@ -35,6 +36,7 @@ function Dashboard() {
 }
 
 function AdminDashboard() {
+  const { showToast } = useToast();
   const [users, setUsers] = useState<AdminUserRecord[]>([]);
   const [activities, setActivities] = useState<ActivityRecord[]>([]);
   const [stats, setStats] = useState<DashboardStat[]>([]);
@@ -51,10 +53,8 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
-
-    const loadDashboard = async () => {
+  const loadDashboard = useCallback(
+    async (active = true) => {
       try {
         const data = await fetchDashboard("Admin");
         if (!active) {
@@ -71,19 +71,25 @@ function AdminDashboard() {
         }
 
         setError("Unable to load the admin dashboard right now.");
+        showToast("Unable to load the admin dashboard right now.", "error");
       } finally {
         if (active) {
           setLoading(false);
         }
       }
-    };
+    },
+    [showToast]
+  );
 
-    void loadDashboard();
+  useEffect(() => {
+    let active = true;
+
+    void loadDashboard(active);
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [loadDashboard]);
 
   const visibleUsers = useMemo(() => {
     return users.filter((user) => {
@@ -137,46 +143,66 @@ function AdminDashboard() {
 
   const handleCreateUser = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const createdUser = await createUser(newUser);
-    const nextUsers = [createdUser, ...users];
-    setUsers(nextUsers);
-    setStats(nextStats(nextUsers));
-    setNewUser({
-      name: "",
-      email: "",
-      password: "",
-      role: "Support",
-      status: "Pending",
-      lastActive: "Just invited",
-    });
+    try {
+      await createUser(newUser);
+      await loadDashboard();
+      setNewUser({
+        name: "",
+        email: "",
+        password: "",
+        role: "Support",
+        status: "Pending",
+        lastActive: "Just invited",
+      });
+      showToast("User created successfully.", "success");
+    } catch {
+      showToast("Unable to create user right now.", "error");
+    }
   };
 
   const updateUserStatus = async (id: number, status: UserStatus) => {
-    const nextUser = await updateUser(id, { status });
-    const nextUsers = users.map((user) => (user.id === id ? nextUser : user));
-    setUsers(nextUsers);
-    setStats(nextStats(nextUsers));
+    try {
+      await updateUser(id, { status });
+      await loadDashboard();
+      showToast("User status updated successfully.", "success");
+    } catch {
+      showToast("Unable to update user status right now.", "error");
+    }
   };
 
   const updateUserRole = async (id: number, role: UserRole) => {
-    const nextUser = await updateUser(id, { role });
-    const nextUsers = users.map((user) => (user.id === id ? nextUser : user));
-    setUsers(nextUsers);
-    setStats(nextStats(nextUsers));
+    try {
+      await updateUser(id, { role });
+      await loadDashboard();
+      showToast("User role updated successfully.", "success");
+    } catch {
+      showToast("Unable to update user role right now.", "error");
+    }
   };
 
   const removeUser = async (id: number) => {
-    await deleteUser(id);
-    const nextUsers = users.filter((user) => user.id !== id);
-    setUsers(nextUsers);
-    setStats(nextStats(nextUsers));
+    try {
+      await deleteUser(id);
+      await loadDashboard();
+      showToast("User deleted successfully.", "info");
+    } catch {
+      showToast("Unable to delete user right now.", "error");
+    }
   };
 
   const toggleActivityReview = async (id: number, reviewed: boolean) => {
-    const nextActivity = await updateActivity(id, reviewed);
-    setActivities((current) =>
-      current.map((activity) => (activity.id === id ? nextActivity : activity))
-    );
+    try {
+      const nextActivity = await updateActivity(id, reviewed);
+      setActivities((current) =>
+        current.map((activity) => (activity.id === id ? nextActivity : activity))
+      );
+      showToast(
+        reviewed ? "Activity marked as reviewed." : "Activity marked as unresolved.",
+        "info"
+      );
+    } catch {
+      showToast("Unable to update activity right now.", "error");
+    }
   };
 
   if (loading) {
@@ -391,6 +417,7 @@ function AdminDashboard() {
 }
 
 function RoleDashboard({ role }: { role: Exclude<AppRole, "Admin"> }) {
+  const { showToast } = useToast();
   const [stats, setStats] = useState<DashboardStat[]>([]);
   const [highlights, setHighlights] = useState<HighlightItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -415,6 +442,7 @@ function RoleDashboard({ role }: { role: Exclude<AppRole, "Admin"> }) {
         }
 
         setError("Unable to load this dashboard right now.");
+        showToast("Unable to load this dashboard right now.", "error");
       } finally {
         if (active) {
           setLoading(false);

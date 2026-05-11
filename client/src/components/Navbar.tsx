@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import { roleConfig } from "../data/roleConfig";
 import type { AppRole } from "../types/roles";
 
@@ -25,6 +26,7 @@ const roleOwners: Record<AppRole, string> = {
 function Navbar({ role, toggleSidebar }: Props) {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { showToast } = useToast();
   const currentRole = roleConfig[role];
   const initials = roleOwners[role]
     .split(" ")
@@ -35,6 +37,7 @@ function Navbar({ role, toggleSidebar }: Props) {
 
   const handleLogout = () => {
     logout();
+    showToast("Logged out successfully.", "info");
     navigate("/login", { replace: true });
   };
 

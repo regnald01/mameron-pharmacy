@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import { ApiError } from "../lib/api";
 import type { AppRole } from "../types/roles";
 import "./Login.css";
@@ -10,6 +11,7 @@ import "./Login.css";
 function Login() {
   const navigate = useNavigate();
   const { login, user } = useAuth();
+  const { showToast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<AppRole>("Admin");
@@ -26,11 +28,12 @@ function Login() {
     try {
       setSubmitting(true);
       await login({ email, password, role });
+      showToast("Signed in successfully.", "success");
       navigate("/", { replace: true });
     } catch (error) {
       const message =
         error instanceof ApiError ? error.message : "Unable to sign in right now.";
-      window.alert(message);
+      showToast(message, "error");
     } finally {
       setSubmitting(false);
     }

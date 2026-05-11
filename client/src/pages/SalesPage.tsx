@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 
+import { useToast } from "../context/ToastContext";
 import {
   createSale,
   deleteSale,
@@ -26,6 +27,7 @@ const emptyForm: SaleForm = {
 };
 
 function SalesPage() {
+  const { showToast } = useToast();
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [stats, setStats] = useState<DashboardStat[]>([]);
   const [form, setForm] = useState<SaleForm>(emptyForm);
@@ -53,6 +55,7 @@ function SalesPage() {
         }
 
         setError("Unable to load sales right now.");
+        showToast("Unable to load sales right now.", "error");
       } finally {
         if (active) {
           setLoading(false);
@@ -92,30 +95,50 @@ function SalesPage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const createdSale = await createSale(form);
-    const nextSales = [createdSale, ...sales];
-    setSales(nextSales);
-    setStats(recalculateSaleStats(nextSales));
-    setForm(emptyForm);
+    try {
+      const createdSale = await createSale(form);
+      const nextSales = [createdSale, ...sales];
+      setSales(nextSales);
+      setStats(recalculateSaleStats(nextSales));
+      setForm(emptyForm);
+      showToast("Sale recorded successfully.", "success");
+    } catch {
+      showToast("Unable to record sale right now.", "error");
+    }
   };
 
   const handleStatusChange = async (id: number, status: SaleStatus) => {
-    const nextSale = await updateSale(id, { status });
-    const nextSales = sales.map((sale) => (sale.id === id ? nextSale : sale));
-    setSales(nextSales);
-    setStats(recalculateSaleStats(nextSales));
+    try {
+      const nextSale = await updateSale(id, { status });
+      const nextSales = sales.map((sale) => (sale.id === id ? nextSale : sale));
+      setSales(nextSales);
+      setStats(recalculateSaleStats(nextSales));
+      showToast("Sale status updated successfully.", "success");
+    } catch {
+      showToast("Unable to update sale status right now.", "error");
+    }
   };
 
   const handlePaymentChange = async (id: number, paymentMethod: PaymentMethod) => {
-    const nextSale = await updateSale(id, { paymentMethod });
-    setSales((current) => current.map((sale) => (sale.id === id ? nextSale : sale)));
+    try {
+      const nextSale = await updateSale(id, { paymentMethod });
+      setSales((current) => current.map((sale) => (sale.id === id ? nextSale : sale)));
+      showToast("Payment method updated successfully.", "success");
+    } catch {
+      showToast("Unable to update payment method right now.", "error");
+    }
   };
 
   const handleDelete = async (id: number) => {
-    await deleteSale(id);
-    const nextSales = sales.filter((sale) => sale.id !== id);
-    setSales(nextSales);
-    setStats(recalculateSaleStats(nextSales));
+    try {
+      await deleteSale(id);
+      const nextSales = sales.filter((sale) => sale.id !== id);
+      setSales(nextSales);
+      setStats(recalculateSaleStats(nextSales));
+      showToast("Sale removed successfully.", "info");
+    } catch {
+      showToast("Unable to remove sale right now.", "error");
+    }
   };
 
   if (loading) {

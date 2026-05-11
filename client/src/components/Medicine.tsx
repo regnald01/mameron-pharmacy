@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ChangeEvent, CSSProperties, FormEvent } from "react";
 
+import { useToast } from "../context/ToastContext";
 import {
   createMedicine,
   deleteMedicine,
@@ -20,6 +21,7 @@ const emptyForm: MedicineForm = {
 };
 
 function Medicines() {
+  const { showToast } = useToast();
   const [medicines, setMedicines] = useState<MedicineRecord[]>([]);
   const [form, setForm] = useState<MedicineForm>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -44,6 +46,7 @@ function Medicines() {
         }
 
         setError("Unable to load medicines right now.");
+        showToast("Unable to load medicines right now.", "error");
       } finally {
         if (active) {
           setLoading(false);
@@ -65,20 +68,26 @@ function Medicines() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (editingId !== null) {
-      const updatedMedicine = await updateMedicine(editingId, form);
-      setMedicines((current) =>
-        current.map((medicine) =>
-          medicine.id === editingId ? updatedMedicine : medicine
-        )
-      );
-      setEditingId(null);
-    } else {
-      const createdMedicine = await createMedicine(form);
-      setMedicines((current) => [...current, createdMedicine]);
-    }
+    try {
+      if (editingId !== null) {
+        const updatedMedicine = await updateMedicine(editingId, form);
+        setMedicines((current) =>
+          current.map((medicine) =>
+            medicine.id === editingId ? updatedMedicine : medicine
+          )
+        );
+        setEditingId(null);
+        showToast("Medicine updated successfully.", "success");
+      } else {
+        const createdMedicine = await createMedicine(form);
+        setMedicines((current) => [...current, createdMedicine]);
+        showToast("Medicine added successfully.", "success");
+      }
 
-    setForm(emptyForm);
+      setForm(emptyForm);
+    } catch {
+      showToast("Unable to save medicine right now.", "error");
+    }
   };
 
   const handleEdit = (medicine: MedicineRecord) => {
@@ -93,8 +102,13 @@ function Medicines() {
   };
 
   const handleDelete = async (id: number) => {
-    await deleteMedicine(id);
-    setMedicines((current) => current.filter((medicine) => medicine.id !== id));
+    try {
+      await deleteMedicine(id);
+      setMedicines((current) => current.filter((medicine) => medicine.id !== id));
+      showToast("Medicine deleted successfully.", "info");
+    } catch {
+      showToast("Unable to delete medicine right now.", "error");
+    }
   };
 
   if (loading) {

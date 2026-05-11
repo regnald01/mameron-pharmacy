@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 
+import { useToast } from "../context/ToastContext";
 import {
   createOrder,
   deleteOrder,
@@ -26,6 +27,7 @@ const emptyForm: OrderForm = {
 };
 
 function OrdersPage() {
+  const { showToast } = useToast();
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [stats, setStats] = useState<DashboardStat[]>([]);
   const [form, setForm] = useState<OrderForm>(emptyForm);
@@ -53,6 +55,7 @@ function OrdersPage() {
         }
 
         setError("Unable to load orders right now.");
+        showToast("Unable to load orders right now.", "error");
       } finally {
         if (active) {
           setLoading(false);
@@ -91,29 +94,49 @@ function OrdersPage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const createdOrder = await createOrder(form);
-    setOrders((current) => [createdOrder, ...current]);
-    setForm(emptyForm);
-    setStats((current) => recalculateOrderStats([createdOrder, ...orders], current));
+    try {
+      const createdOrder = await createOrder(form);
+      setOrders((current) => [createdOrder, ...current]);
+      setForm(emptyForm);
+      setStats((current) => recalculateOrderStats([createdOrder, ...orders], current));
+      showToast("Order created successfully.", "success");
+    } catch {
+      showToast("Unable to create order right now.", "error");
+    }
   };
 
   const handleStatusChange = async (id: number, status: OrderStatus) => {
-    const nextOrder = await updateOrder(id, { status });
-    const nextOrders = orders.map((order) => (order.id === id ? nextOrder : order));
-    setOrders(nextOrders);
-    setStats((current) => recalculateOrderStats(nextOrders, current));
+    try {
+      const nextOrder = await updateOrder(id, { status });
+      const nextOrders = orders.map((order) => (order.id === id ? nextOrder : order));
+      setOrders(nextOrders);
+      setStats((current) => recalculateOrderStats(nextOrders, current));
+      showToast("Order status updated successfully.", "success");
+    } catch {
+      showToast("Unable to update order status right now.", "error");
+    }
   };
 
   const handlePriorityChange = async (id: number, priority: OrderPriority) => {
-    const nextOrder = await updateOrder(id, { priority });
-    setOrders((current) => current.map((order) => (order.id === id ? nextOrder : order)));
+    try {
+      const nextOrder = await updateOrder(id, { priority });
+      setOrders((current) => current.map((order) => (order.id === id ? nextOrder : order)));
+      showToast("Order priority updated successfully.", "success");
+    } catch {
+      showToast("Unable to update order priority right now.", "error");
+    }
   };
 
   const handleDelete = async (id: number) => {
-    await deleteOrder(id);
-    const nextOrders = orders.filter((order) => order.id !== id);
-    setOrders(nextOrders);
-    setStats((current) => recalculateOrderStats(nextOrders, current));
+    try {
+      await deleteOrder(id);
+      const nextOrders = orders.filter((order) => order.id !== id);
+      setOrders(nextOrders);
+      setStats((current) => recalculateOrderStats(nextOrders, current));
+      showToast("Order removed successfully.", "info");
+    } catch {
+      showToast("Unable to remove order right now.", "error");
+    }
   };
 
   if (loading) {
