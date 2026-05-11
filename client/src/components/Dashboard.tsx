@@ -1,48 +1,25 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 
+import {
+  fetchDashboard,
+  updateActivity,
+  updateUser,
+} from "../lib/api";
+import type {
+  ActivityRecord,
+  AdminUserRecord,
+  DashboardStat,
+  HighlightItem,
+} from "../lib/api";
 import type { AppRole } from "../types/roles";
 
 type UserStatus = "Active" | "Suspended" | "Pending";
 type UserRole = AppRole;
-type ActivitySeverity = "High" | "Medium" | "Low";
-
-interface UserRecord {
-  id: number;
-  name: string;
-  email: string;
-  role: UserRole;
-  status: UserStatus;
-  lastActive: string;
-}
-
-interface ActivityRecord {
-  id: number;
-  actor: string;
-  action: string;
-  area: string;
-  severity: ActivitySeverity;
-  time: string;
-  reviewed: boolean;
-}
 
 interface RoleOutletContext {
   role: AppRole;
 }
-
-const initialUsers: UserRecord[] = [
-  { id: 1, name: "Alice Mboya", email: "alice@mameron.local", role: "Admin", status: "Active", lastActive: "2 minutes ago" },
-  { id: 2, name: "Brian Kato", email: "brian@mameron.local", role: "Pharmacist", status: "Active", lastActive: "14 minutes ago" },
-  { id: 3, name: "Chantal Amina", email: "chantal@mameron.local", role: "Cashier", status: "Pending", lastActive: "Today, 09:12" },
-  { id: 4, name: "David Ouma", email: "david@mameron.local", role: "Support", status: "Suspended", lastActive: "Yesterday, 16:48" },
-];
-
-const initialActivities: ActivityRecord[] = [
-  { id: 101, actor: "Alice Mboya", action: "Changed user permissions for Brian Kato", area: "Access Control", severity: "High", time: "5 minutes ago", reviewed: false },
-  { id: 102, actor: "Brian Kato", action: "Approved 14 pending prescriptions", area: "Orders", severity: "Medium", time: "18 minutes ago", reviewed: true },
-  { id: 103, actor: "System", action: "Nightly backup completed successfully", area: "Infrastructure", severity: "Low", time: "01:00 AM", reviewed: true },
-  { id: 104, actor: "Security Watcher", action: "Blocked suspicious login attempt from new device", area: "Authentication", severity: "High", time: "Yesterday, 11:24 PM", reviewed: false },
-];
 
 function Dashboard() {
   const { role } = useOutletContext<RoleOutletContext>();
@@ -51,22 +28,51 @@ function Dashboard() {
     return <AdminDashboard />;
   }
 
-  if (role === "Pharmacist") {
-    return <PharmacistDashboard />;
-  }
-
-  if (role === "Cashier") {
-    return <CashierDashboard />;
-  }
-
-  return <SupportDashboard />;
+  return <RoleDashboard role={role} />;
 }
 
 function AdminDashboard() {
-  const [users, setUsers] = useState(initialUsers);
-  const [activities, setActivities] = useState(initialActivities);
+  const [users, setUsers] = useState<AdminUserRecord[]>([]);
+  const [activities, setActivities] = useState<ActivityRecord[]>([]);
+  const [stats, setStats] = useState<DashboardStat[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<UserStatus | "All">("All");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadDashboard = async () => {
+      try {
+        const data = await fetchDashboard("Admin");
+        if (!active) {
+          return;
+        }
+
+        setUsers(data.users ?? []);
+        setActivities(data.activities ?? []);
+        setStats(data.stats);
+        setError(null);
+      } catch {
+        if (!active) {
+          return;
+        }
+
+        setError("Unable to load the admin dashboard right now.");
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadDashboard();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const visibleUsers = useMemo(() => {
     return users.filter((user) => {
@@ -80,31 +86,38 @@ function AdminDashboard() {
     });
   }, [search, statusFilter, users]);
 
-  const unresolvedActivities = activities.filter((activity) => !activity.reviewed).length;
-  const activeUsers = users.filter((user) => user.status === "Active").length;
-  const pendingUsers = users.filter((user) => user.status === "Pending").length;
-
-  const updateUserStatus = (id: number, status: UserStatus) => {
-    setUsers((current) =>
-      current.map((user) => (user.id === id ? { ...user, status } : user))
-    );
+  const updateUserStatus = async (id: number, status: UserStatus) => {
+    const nextUser = await updateUser(id, { status });
+    setUsers((current) => current.map((user) => (user.id === id ? nextUser : user)));
   };
 
-  const updateUserRole = (id: number, role: UserRole) => {
-    setUsers((current) =>
-      current.map((user) => (user.id === id ? { ...user, role } : user))
-    );
+  const updateUserRole = async (id: number, role: UserRole) => {
+    const nextUser = await updateUser(id, { role });
+    setUsers((current) => current.map((user) => (user.id === id ? nextUser : user)));
   };
 
-  const toggleActivityReview = (id: number) => {
+  const toggleActivityReview = async (id: number, reviewed: boolean) => {
+    const nextActivity = await updateActivity(id, reviewed);
     setActivities((current) =>
-      current.map((activity) =>
-        activity.id === id
-          ? { ...activity, reviewed: !activity.reviewed }
-          : activity
-      )
+      current.map((activity) => (activity.id === id ? nextActivity : activity))
     );
   };
+
+  if (loading) {
+    return (
+      <section className="dashboard-page">
+        <section className="panel">Loading dashboard...</section>
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section className="dashboard-page">
+        <section className="panel">{error}</section>
+      </section>
+    );
+  }
 
   return (
     <section className="dashboard-page">
@@ -116,14 +129,7 @@ function AdminDashboard() {
         secondaryAction="Export activity"
       />
 
-      <StatsGrid
-        items={[
-          { label: "Total users", value: String(users.length), description: `${activeUsers} currently active in the workspace` },
-          { label: "Pending approvals", value: String(pendingUsers), description: "Accounts waiting for activation or review" },
-          { label: "Open alerts", value: String(unresolvedActivities), description: "Activity items still waiting for an admin check" },
-          { label: "Audit coverage", value: "98%", description: "Recent system actions captured in the log feed" },
-        ]}
-      />
+      <StatsGrid items={stats} />
 
       <div className="dashboard-grid">
         <section className="panel panel--wide">
@@ -179,7 +185,7 @@ function AdminDashboard() {
                     <td>
                       <select
                         value={user.role}
-                        onChange={(event) => updateUserRole(user.id, event.target.value as UserRole)}
+                        onChange={(event) => void updateUserRole(user.id, event.target.value as UserRole)}
                       >
                         <option value="Admin">Admin</option>
                         <option value="Pharmacist">Pharmacist</option>
@@ -197,7 +203,7 @@ function AdminDashboard() {
                           type="button"
                           className="button button--ghost"
                           onClick={() =>
-                            updateUserStatus(
+                            void updateUserStatus(
                               user.id,
                               user.status === "Suspended" ? "Active" : "Suspended"
                             )
@@ -208,7 +214,7 @@ function AdminDashboard() {
                         <button
                           type="button"
                           className="button button--ghost"
-                          onClick={() => updateUserStatus(user.id, "Active")}
+                          onClick={() => void updateUserStatus(user.id, "Active")}
                         >
                           Approve
                         </button>
@@ -247,7 +253,7 @@ function AdminDashboard() {
                   <button
                     type="button"
                     className="button button--ghost"
-                    onClick={() => toggleActivityReview(activity.id)}
+                    onClick={() => void toggleActivityReview(activity.id, !activity.reviewed)}
                   >
                     {activity.reviewed ? "Mark unresolved" : "Mark reviewed"}
                   </button>
@@ -261,113 +267,152 @@ function AdminDashboard() {
   );
 }
 
-function PharmacistDashboard() {
-  return (
-    <section className="dashboard-page">
-      <Hero
+function RoleDashboard({ role }: { role: Exclude<AppRole, "Admin"> }) {
+  const [stats, setStats] = useState<DashboardStat[]>([]);
+  const [highlights, setHighlights] = useState<HighlightItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadDashboard = async () => {
+      try {
+        const data = await fetchDashboard(role);
+        if (!active) {
+          return;
+        }
+
+        setStats(data.stats);
+        setHighlights(data.highlights ?? []);
+        setError(null);
+      } catch {
+        if (!active) {
+          return;
+        }
+
+        setError("Unable to load this dashboard right now.");
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadDashboard();
+
+    return () => {
+      active = false;
+    };
+  }, [role]);
+
+  if (loading) {
+    return (
+      <section className="dashboard-page">
+        <section className="panel">Loading dashboard...</section>
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section className="dashboard-page">
+        <section className="panel">{error}</section>
+      </section>
+    );
+  }
+
+  if (role === "Pharmacist") {
+    return (
+      <GenericRoleDashboard
         eyebrow="Medicine Operations"
         title="Pharmacist dashboard focused on stock and prescriptions"
         text="Pharmacists only see their workspace and medicine features, so they can manage stock and prescription queues without admin or cashier tools."
         primaryAction="Review low stock"
         secondaryAction="Open medicines"
+        sectionTitle="What pharmacists can do here"
+        sectionEyebrow="Daily Focus"
+        stats={stats}
+        highlights={highlights}
       />
-      <StatsGrid
-        items={[
-          { label: "Prescriptions queue", value: "18", description: "Items waiting for pharmacist review" },
-          { label: "Low stock medicines", value: "7", description: "Products that need restocking soon" },
-          { label: "Expiring this month", value: "4", description: "Medicines needing priority rotation" },
-          { label: "Today's approvals", value: "26", description: "Prescriptions approved by your team" },
-        ]}
-      />
-      <div className="dashboard-grid dashboard-grid--single">
-        <section className="panel">
-          <p className="eyebrow">Daily Focus</p>
-          <h3>What pharmacists can do here</h3>
-          <div className="highlight-list">
-            <article className="highlight-card">
-              <strong>Monitor medicine availability</strong>
-              <p>Check low stock, expiring products, and item movement before shortages affect patients.</p>
-            </article>
-            <article className="highlight-card">
-              <strong>Prepare prescription workflows</strong>
-              <p>See pending approvals, refill requests, and pharmacist-owned actions from one dashboard.</p>
-            </article>
-          </div>
-        </section>
-      </div>
-    </section>
-  );
-}
+    );
+  }
 
-function CashierDashboard() {
-  return (
-    <section className="dashboard-page">
-      <Hero
+  if (role === "Cashier") {
+    return (
+      <GenericRoleDashboard
         eyebrow="Sales Operations"
         title="Cashier dashboard for sales and shift performance"
         text="Cashiers only see their dashboard and sales area, keeping billing and payment work separate from medicine or admin controls."
         primaryAction="View shift totals"
         secondaryAction="Open sales"
+        sectionTitle="Sales workspace only"
+        sectionEyebrow="Cashier Focus"
+        stats={stats}
+        highlights={highlights}
       />
-      <StatsGrid
-        items={[
-          { label: "Today's sales", value: "$4,820", description: "Revenue processed in the current shift cycle" },
-          { label: "Transactions", value: "126", description: "Completed payments across all desks today" },
-          { label: "Average basket", value: "$38", description: "Average customer purchase amount" },
-          { label: "Refund requests", value: "3", description: "Cases waiting for review or approval" },
-        ]}
-      />
-      <div className="dashboard-grid dashboard-grid--single">
-        <section className="panel">
-          <p className="eyebrow">Cashier Focus</p>
-          <h3>Sales workspace only</h3>
-          <div className="highlight-list">
-            <article className="highlight-card">
-              <strong>Track live revenue</strong>
-              <p>Keep an eye on totals, completed transactions, and payment flow throughout the day.</p>
-            </article>
-            <article className="highlight-card">
-              <strong>Handle desk exceptions</strong>
-              <p>Follow up on refunds, payment issues, and shift reconciliation without touching admin settings.</p>
-            </article>
-          </div>
-        </section>
-      </div>
-    </section>
+    );
+  }
+
+  return (
+    <GenericRoleDashboard
+      eyebrow="Order Support"
+      title="Support dashboard for customer issues and order handling"
+      text="Support staff only see their dashboard and orders area so they can focus on service, handoffs, and issue resolution."
+      primaryAction="Review tickets"
+      secondaryAction="Open orders"
+      sectionTitle="Orders and customer follow-up"
+      sectionEyebrow="Support Focus"
+      stats={stats}
+      highlights={highlights}
+    />
   );
 }
 
-function SupportDashboard() {
+interface GenericRoleDashboardProps {
+  eyebrow: string;
+  title: string;
+  text: string;
+  primaryAction: string;
+  secondaryAction: string;
+  sectionTitle: string;
+  sectionEyebrow: string;
+  stats: DashboardStat[];
+  highlights: HighlightItem[];
+}
+
+function GenericRoleDashboard({
+  eyebrow,
+  title,
+  text,
+  primaryAction,
+  secondaryAction,
+  sectionTitle,
+  sectionEyebrow,
+  stats,
+  highlights,
+}: GenericRoleDashboardProps) {
   return (
     <section className="dashboard-page">
       <Hero
-        eyebrow="Order Support"
-        title="Support dashboard for customer issues and order handling"
-        text="Support staff only see their dashboard and orders area so they can focus on service, handoffs, and issue resolution."
-        primaryAction="Review tickets"
-        secondaryAction="Open orders"
+        eyebrow={eyebrow}
+        title={title}
+        text={text}
+        primaryAction={primaryAction}
+        secondaryAction={secondaryAction}
       />
-      <StatsGrid
-        items={[
-          { label: "Open order issues", value: "11", description: "Cases currently waiting for follow-up" },
-          { label: "Late deliveries", value: "5", description: "Orders that need customer communication" },
-          { label: "Resolved today", value: "23", description: "Support cases closed by the team" },
-          { label: "Response time", value: "12m", description: "Average first-response speed this morning" },
-        ]}
-      />
+      <StatsGrid items={stats} />
       <div className="dashboard-grid dashboard-grid--single">
         <section className="panel">
-          <p className="eyebrow">Support Focus</p>
-          <h3>Orders and customer follow-up</h3>
+          <p className="eyebrow">{sectionEyebrow}</p>
+          <h3>{sectionTitle}</h3>
           <div className="highlight-list">
-            <article className="highlight-card">
-              <strong>Resolve order blockers</strong>
-              <p>Follow delayed orders, incomplete prescriptions, and delivery questions from one service queue.</p>
-            </article>
-            <article className="highlight-card">
-              <strong>Keep customers updated</strong>
-              <p>Use the support dashboard to prioritize urgent requests and close the communication loop faster.</p>
-            </article>
+            {highlights.map((highlight) => (
+              <article key={highlight.title} className="highlight-card">
+                <strong>{highlight.title}</strong>
+                <p>{highlight.text}</p>
+              </article>
+            ))}
           </div>
         </section>
       </div>
@@ -403,15 +448,7 @@ function Hero({ eyebrow, title, text, primaryAction, secondaryAction }: HeroProp
   );
 }
 
-interface StatsGridProps {
-  items: Array<{
-    label: string;
-    value: string;
-    description: string;
-  }>;
-}
-
-function StatsGrid({ items }: StatsGridProps) {
+function StatsGrid({ items }: { items: DashboardStat[] }) {
   return (
     <div className="stats-grid">
       {items.map((item) => (

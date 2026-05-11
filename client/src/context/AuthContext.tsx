@@ -8,9 +8,12 @@ import {
 
 import type { ReactNode } from "react";
 
+import { loginRequest } from "../lib/api";
 import type { AppRole } from "../types/roles";
 
 interface AuthUser {
+  id: number;
+  name: string;
   email: string;
   role: AppRole;
 }
@@ -23,7 +26,7 @@ interface LoginPayload {
 
 interface AuthContextValue {
   user: AuthUser | null;
-  login: (payload: LoginPayload) => void;
+  login: (payload: LoginPayload) => Promise<void>;
   logout: () => void;
 }
 
@@ -45,8 +48,8 @@ function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
-      login: ({ email, role }) => {
-        const nextUser = { email, role };
+      login: async (payload) => {
+        const nextUser = await loginRequest(payload);
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser));
         setUser(nextUser);
       },

@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
+import { ApiError } from "../lib/api";
 import type { AppRole } from "../types/roles";
 import "./Login.css";
 
@@ -12,15 +13,26 @@ function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<AppRole>("Admin");
+  const [submitting, setSubmitting] = useState(false);
 
   if (user) {
     return <Navigate to="/" replace />;
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    login({ email, password, role });
-    navigate("/", { replace: true });
+
+    try {
+      setSubmitting(true);
+      await login({ email, password, role });
+      navigate("/", { replace: true });
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : "Unable to sign in right now.";
+      window.alert(message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -80,8 +92,8 @@ function Login() {
             </select>
           </label>
 
-          <button type="submit" className="login-button">
-            Continue to dashboard
+          <button type="submit" className="login-button" disabled={submitting}>
+            {submitting ? "Signing in..." : "Continue to dashboard"}
           </button>
         </form>
       </section>

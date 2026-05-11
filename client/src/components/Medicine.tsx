@@ -1,58 +1,109 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ChangeEvent, CSSProperties, FormEvent } from "react";
 
-interface Medicine {
-  name: string;
-  purchasePrice: string;
-  sellingPrice: string;
-  quantity: string;
-  expiryDate: string;
-}
+import {
+  createMedicine,
+  deleteMedicine,
+  fetchMedicines,
+  updateMedicine,
+} from "../lib/api";
+import type { MedicineRecord } from "../lib/api";
+
+type MedicineForm = Omit<MedicineRecord, "id">;
+
+const emptyForm: MedicineForm = {
+  name: "",
+  purchasePrice: "",
+  sellingPrice: "",
+  quantity: "",
+  expiryDate: "",
+};
 
 function Medicines() {
-  const [medicines, setMedicines] = useState<Medicine[]>([]);
-  const [form, setForm] = useState<Medicine>({
-    name: "",
-    purchasePrice: "",
-    sellingPrice: "",
-    quantity: "",
-    expiryDate: "",
-  });
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [medicines, setMedicines] = useState<MedicineRecord[]>([]);
+  const [form, setForm] = useState<MedicineForm>(emptyForm);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadMedicines = async () => {
+      try {
+        const data = await fetchMedicines();
+        if (!active) {
+          return;
+        }
+
+        setMedicines(data);
+        setError(null);
+      } catch {
+        if (!active) {
+          return;
+        }
+
+        setError("Unable to load medicines right now.");
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadMedicines();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [event.target.name]: event.target.value });
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (editingIndex !== null) {
-      const updated = [...medicines];
-      updated[editingIndex] = form;
-      setMedicines(updated);
-      setEditingIndex(null);
+    if (editingId !== null) {
+      const updatedMedicine = await updateMedicine(editingId, form);
+      setMedicines((current) =>
+        current.map((medicine) =>
+          medicine.id === editingId ? updatedMedicine : medicine
+        )
+      );
+      setEditingId(null);
     } else {
-      setMedicines([...medicines, form]);
+      const createdMedicine = await createMedicine(form);
+      setMedicines((current) => [...current, createdMedicine]);
     }
 
+    setForm(emptyForm);
+  };
+
+  const handleEdit = (medicine: MedicineRecord) => {
     setForm({
-      name: "",
-      purchasePrice: "",
-      sellingPrice: "",
-      quantity: "",
-      expiryDate: "",
+      name: medicine.name,
+      purchasePrice: medicine.purchasePrice,
+      sellingPrice: medicine.sellingPrice,
+      quantity: medicine.quantity,
+      expiryDate: medicine.expiryDate,
     });
+    setEditingId(medicine.id);
   };
 
-  const handleEdit = (index: number) => {
-    setForm(medicines[index]);
-    setEditingIndex(index);
+  const handleDelete = async (id: number) => {
+    await deleteMedicine(id);
+    setMedicines((current) => current.filter((medicine) => medicine.id !== id));
   };
 
-  const handleDelete = (index: number) => {
-    setMedicines((current) => current.filter((_, itemIndex) => itemIndex !== index));
-  };
+  if (loading) {
+    return <section className="panel panel--wide">Loading medicines...</section>;
+  }
+
+  if (error) {
+    return <section className="panel panel--wide">{error}</section>;
+  }
 
   return (
     <section className="panel panel--wide">
@@ -99,7 +150,7 @@ function Medicines() {
           required
         />
         <button type="submit" className="button button--primary">
-          {editingIndex !== null ? "Update medicine" : "Add medicine"}
+          {editingId !== null ? "Update medicine" : "Add medicine"}
         </button>
       </form>
 
@@ -121,8 +172,8 @@ function Medicines() {
                 <td colSpan={6}>No medicines added yet.</td>
               </tr>
             ) : (
-              medicines.map((medicine, index) => (
-                <tr key={`${medicine.name}-${index}`}>
+              medicines.map((medicine) => (
+                <tr key={medicine.id}>
                   <td>{medicine.name}</td>
                   <td>{medicine.purchasePrice}</td>
                   <td>{medicine.sellingPrice}</td>
@@ -135,14 +186,14 @@ function Medicines() {
                       <button
                         type="button"
                         className="button button--ghost"
-                        onClick={() => handleEdit(index)}
+                        onClick={() => handleEdit(medicine)}
                       >
                         Edit
                       </button>
                       <button
                         type="button"
                         className="button button--ghost"
-                        onClick={() => handleDelete(index)}
+                        onClick={() => void handleDelete(medicine.id)}
                       >
                         Delete
                       </button>
