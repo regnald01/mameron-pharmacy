@@ -54,6 +54,31 @@ export interface MedicineRecord {
   expiryDate: string;
 }
 
+export interface OrderRecord {
+  id: number;
+  customerName: string;
+  prescriptionCode: string;
+  medicineName: string;
+  quantity: string;
+  status: "Pending" | "Approved" | "In Transit" | "Delivered" | "Issue";
+  priority: "High" | "Medium" | "Low";
+  assignedTo: string;
+  createdAtLabel: string;
+}
+
+export interface SaleRecord {
+  id: number;
+  customerName: string;
+  invoiceCode: string;
+  medicineName: string;
+  units: string;
+  totalAmount: string;
+  paymentMethod: "Cash" | "Card" | "Mobile" | "Insurance";
+  status: "Completed" | "Pending" | "Refunded";
+  cashierName: string;
+  soldAtLabel: string;
+}
+
 class ApiError extends Error {
   status: number;
 
@@ -156,6 +181,70 @@ export async function updateMedicine(id: number, payload: Omit<MedicineRecord, "
 
 export async function deleteMedicine(id: number) {
   await apiRequest<void>(`/medicines/${id}/`, {
+    method: "DELETE",
+  });
+}
+
+export async function fetchOrders() {
+  return apiRequest<{ orders: OrderRecord[]; stats: DashboardStat[] }>("/orders/");
+}
+
+export async function createOrder(
+  payload: Omit<OrderRecord, "id">
+) {
+  const data = await apiRequest<{ order: OrderRecord }>("/orders/create/", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  return data.order;
+}
+
+export async function updateOrder(
+  id: number,
+  payload: Partial<Pick<OrderRecord, "status" | "priority" | "assignedTo">>
+) {
+  const data = await apiRequest<{ order: OrderRecord }>(`/orders/${id}/`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+
+  return data.order;
+}
+
+export async function deleteOrder(id: number) {
+  await apiRequest<void>(`/orders/${id}/`, {
+    method: "DELETE",
+  });
+}
+
+export async function fetchSales() {
+  return apiRequest<{ sales: SaleRecord[]; stats: DashboardStat[] }>("/sales/");
+}
+
+export async function createSale(payload: Omit<SaleRecord, "id">) {
+  const data = await apiRequest<{ sale: SaleRecord }>("/sales/create/", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  return data.sale;
+}
+
+export async function updateSale(
+  id: number,
+  payload: Partial<Pick<SaleRecord, "status" | "paymentMethod">>
+) {
+  const data = await apiRequest<{ sale: SaleRecord }>(`/sales/${id}/`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+
+  return data.sale;
+}
+
+export async function deleteSale(id: number) {
+  await apiRequest<void>(`/sales/${id}/`, {
     method: "DELETE",
   });
 }
