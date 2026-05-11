@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import { useOutletContext } from "react-router-dom";
 
 import {
+  createUser,
+  deleteUser,
   fetchDashboard,
   updateActivity,
   updateUser,
@@ -35,6 +38,14 @@ function AdminDashboard() {
   const [users, setUsers] = useState<AdminUserRecord[]>([]);
   const [activities, setActivities] = useState<ActivityRecord[]>([]);
   const [stats, setStats] = useState<DashboardStat[]>([]);
+  const [newUser, setNewUser] = useState({
+    name: "",
+    email: "",
+    password: "",
+    role: "Support" as UserRole,
+    status: "Pending" as UserStatus,
+    lastActive: "Just invited",
+  });
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<UserStatus | "All">("All");
   const [loading, setLoading] = useState(true);
@@ -86,14 +97,79 @@ function AdminDashboard() {
     });
   }, [search, statusFilter, users]);
 
+  const nextStats = (nextUsers: AdminUserRecord[], nextActivities: ActivityRecord[] = activities) => {
+    const unresolvedActivities = nextActivities.filter((activity) => !activity.reviewed).length;
+    const activeUsers = nextUsers.filter((user) => user.status === "Active").length;
+    const pendingUsers = nextUsers.filter((user) => user.status === "Pending").length;
+
+    return [
+      {
+        label: "Total users",
+        value: String(nextUsers.length),
+        description: `${activeUsers} currently active in the workspace`,
+      },
+      {
+        label: "Pending approvals",
+        value: String(pendingUsers),
+        description: "Accounts waiting for activation or review",
+      },
+      {
+        label: "Open alerts",
+        value: String(unresolvedActivities),
+        description: "Activity items still waiting for an admin check",
+      },
+      {
+        label: "Audit coverage",
+        value: "98%",
+        description: "Recent system actions captured in the log feed",
+      },
+    ];
+  };
+
+  const handleNewUserChange = (
+    event: ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    setNewUser((current) => ({
+      ...current,
+      [event.target.name]: event.target.value,
+    }));
+  };
+
+  const handleCreateUser = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const createdUser = await createUser(newUser);
+    const nextUsers = [createdUser, ...users];
+    setUsers(nextUsers);
+    setStats(nextStats(nextUsers));
+    setNewUser({
+      name: "",
+      email: "",
+      password: "",
+      role: "Support",
+      status: "Pending",
+      lastActive: "Just invited",
+    });
+  };
+
   const updateUserStatus = async (id: number, status: UserStatus) => {
     const nextUser = await updateUser(id, { status });
-    setUsers((current) => current.map((user) => (user.id === id ? nextUser : user)));
+    const nextUsers = users.map((user) => (user.id === id ? nextUser : user));
+    setUsers(nextUsers);
+    setStats(nextStats(nextUsers));
   };
 
   const updateUserRole = async (id: number, role: UserRole) => {
     const nextUser = await updateUser(id, { role });
-    setUsers((current) => current.map((user) => (user.id === id ? nextUser : user)));
+    const nextUsers = users.map((user) => (user.id === id ? nextUser : user));
+    setUsers(nextUsers);
+    setStats(nextStats(nextUsers));
+  };
+
+  const removeUser = async (id: number) => {
+    await deleteUser(id);
+    const nextUsers = users.filter((user) => user.id !== id);
+    setUsers(nextUsers);
+    setStats(nextStats(nextUsers));
   };
 
   const toggleActivityReview = async (id: number, reviewed: boolean) => {
@@ -159,6 +235,46 @@ function AdminDashboard() {
             </div>
           </div>
 
+          <form onSubmit={handleCreateUser} className="toolbar">
+            <input
+              name="name"
+              value={newUser.name}
+              onChange={handleNewUserChange}
+              placeholder="Full name"
+              required
+            />
+            <input
+              name="email"
+              type="email"
+              value={newUser.email}
+              onChange={handleNewUserChange}
+              placeholder="Email address"
+              required
+            />
+            <input
+              name="password"
+              type="password"
+              value={newUser.password}
+              onChange={handleNewUserChange}
+              placeholder="Temporary password"
+              required
+            />
+            <select name="role" value={newUser.role} onChange={handleNewUserChange}>
+              <option value="Admin">Admin</option>
+              <option value="Pharmacist">Pharmacist</option>
+              <option value="Cashier">Cashier</option>
+              <option value="Support">Support</option>
+            </select>
+            <select name="status" value={newUser.status} onChange={handleNewUserChange}>
+              <option value="Active">Active</option>
+              <option value="Pending">Pending</option>
+              <option value="Suspended">Suspended</option>
+            </select>
+            <button type="submit" className="button button--primary">
+              Add user
+            </button>
+          </form>
+
           <div className="table-wrap">
             <table className="data-table">
               <thead>
@@ -217,6 +333,13 @@ function AdminDashboard() {
                           onClick={() => void updateUserStatus(user.id, "Active")}
                         >
                           Approve
+                        </button>
+                        <button
+                          type="button"
+                          className="button button--ghost"
+                          onClick={() => void removeUser(user.id)}
+                        >
+                          Delete
                         </button>
                       </div>
                     </td>

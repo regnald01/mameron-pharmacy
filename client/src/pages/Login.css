@@ -106,6 +106,10 @@
   font-weight: 600;
 }
 
+.password-field {
+  position: relative;
+}
+
 .login-form input,
 .login-form select {
   padding: 13px 14px;
@@ -113,6 +117,35 @@
   border: 1px solid rgba(148, 163, 184, 0.34);
   background: #ffffff;
   color: #0f172a;
+}
+
+.password-field input {
+  width: 100%;
+  padding-right: 72px;
+  box-sizing: border-box;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: #0f766e;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.password-toggle svg {
+  width: 18px;
+  height: 18px;
 }
 
 .login-button {

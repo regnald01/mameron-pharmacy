@@ -147,6 +147,21 @@ export async function updateUser(id: number, payload: Partial<Pick<AdminUserReco
   return data.user;
 }
 
+export async function createUser(payload: Omit<AdminUserRecord, "id"> & { password: string }) {
+  const data = await apiRequest<{ user: AdminUserRecord }>("/users/", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  return data.user;
+}
+
+export async function deleteUser(id: number) {
+  await apiRequest<void>(`/users/${id}/`, {
+    method: "DELETE",
+  });
+}
+
 export async function updateActivity(id: number, reviewed: boolean) {
   const data = await apiRequest<{ activity: ActivityRecord }>(`/activities/${id}/`, {
     method: "PATCH",
