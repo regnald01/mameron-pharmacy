@@ -65,13 +65,22 @@ class ApiError extends Error {
 }
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+  } catch {
+    throw new ApiError(
+      "Cannot reach the backend API. Make sure the Django server is running, then restart the Vite client.",
+      0
+    );
+  }
 
   if (response.status === 204) {
     return undefined as T;
