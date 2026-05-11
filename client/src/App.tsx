@@ -7,6 +7,7 @@ import { AuthProvider } from "./context/AuthContext";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import ManagementPage from "./pages/ManagementPage";
+import StockPage from "./pages/StockPage";
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
               }
             />
             <Route path="products" element={<Medicines />} />
+            <Route path="stock" element={<StockPage />} />
             <Route
               path="sales"
               element={

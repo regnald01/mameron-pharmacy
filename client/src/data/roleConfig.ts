@@ -25,6 +25,7 @@ export const roleConfig: Record<AppRole, RoleMeta> = {
       { to: "/", label: "Dashboard", icon: "🏠" },
       { to: "/orders", label: "Orders", icon: "📦" },
       { to: "/products", label: "Medicines", icon: "💊" },
+      { to: "/stock", label: "Stock", icon: "📋" },
       { to: "/sales", label: "Sales", icon: "📈" },
     ],
   },
@@ -37,6 +38,7 @@ export const roleConfig: Record<AppRole, RoleMeta> = {
     navItems: [
       { to: "/", label: "Dashboard", icon: "🏠" },
       { to: "/products", label: "Medicines", icon: "💊" },
+      { to: "/stock", label: "Stock", icon: "📋" },
     ],
   },
   Cashier: {
