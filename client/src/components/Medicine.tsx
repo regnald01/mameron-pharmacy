@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ChangeEvent, CSSProperties, FormEvent } from "react";
 
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import {
   createMedicine,
@@ -21,7 +22,9 @@ const emptyForm: MedicineForm = {
 };
 
 function Medicines() {
+  const { user } = useAuth();
   const { showToast } = useToast();
+  const actor = user?.name ?? user?.email ?? "System";
   const [medicines, setMedicines] = useState<MedicineRecord[]>([]);
   const [form, setForm] = useState<MedicineForm>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -70,7 +73,7 @@ function Medicines() {
 
     try {
       if (editingId !== null) {
-        const updatedMedicine = await updateMedicine(editingId, form);
+        const updatedMedicine = await updateMedicine(editingId, form, actor);
         setMedicines((current) =>
           current.map((medicine) =>
             medicine.id === editingId ? updatedMedicine : medicine
@@ -79,7 +82,7 @@ function Medicines() {
         setEditingId(null);
         showToast("Medicine updated successfully.", "success");
       } else {
-        const createdMedicine = await createMedicine(form);
+        const createdMedicine = await createMedicine(form, actor);
         setMedicines((current) => [...current, createdMedicine]);
         showToast("Medicine added successfully.", "success");
       }
@@ -103,7 +106,7 @@ function Medicines() {
 
   const handleDelete = async (id: number) => {
     try {
-      await deleteMedicine(id);
+      await deleteMedicine(id, actor);
       setMedicines((current) => current.filter((medicine) => medicine.id !== id));
       showToast("Medicine deleted successfully.", "info");
     } catch {

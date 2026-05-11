@@ -111,13 +111,17 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
     return undefined as T;
   }
 
-  const data = (await response.json()) as T & { detail?: string };
+  const text = await response.text();
+  const data = text ? (JSON.parse(text) as T & { detail?: string }) : undefined;
 
   if (!response.ok) {
-    throw new ApiError(data.detail ?? "Something went wrong.", response.status);
+    throw new ApiError(
+      (data as { detail?: string } | undefined)?.detail ?? "Something went wrong.",
+      response.status
+    );
   }
 
-  return data;
+  return data as T;
 }
 
 export async function loginRequest(payload: LoginPayload): Promise<AuthUser> {
@@ -138,27 +142,35 @@ export async function fetchDashboard(role: AppRole) {
   }>(`/dashboard/?role=${encodeURIComponent(role)}`);
 }
 
-export async function updateUser(id: number, payload: Partial<Pick<AdminUserRecord, "role" | "status">>) {
+export async function updateUser(
+  id: number,
+  payload: Partial<Pick<AdminUserRecord, "role" | "status">>,
+  actor?: string
+) {
   const data = await apiRequest<{ user: AdminUserRecord }>(`/users/${id}/`, {
     method: "PATCH",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, actor }),
   });
 
   return data.user;
 }
 
-export async function createUser(payload: Omit<AdminUserRecord, "id"> & { password: string }) {
+export async function createUser(
+  payload: Omit<AdminUserRecord, "id"> & { password: string },
+  actor?: string
+) {
   const data = await apiRequest<{ user: AdminUserRecord }>("/users/", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, actor }),
   });
 
   return data.user;
 }
 
-export async function deleteUser(id: number) {
+export async function deleteUser(id: number, actor?: string) {
   await apiRequest<void>(`/users/${id}/`, {
     method: "DELETE",
+    body: JSON.stringify({ actor }),
   });
 }
 
@@ -176,27 +188,32 @@ export async function fetchMedicines() {
   return data.medicines;
 }
 
-export async function createMedicine(payload: Omit<MedicineRecord, "id">) {
+export async function createMedicine(payload: Omit<MedicineRecord, "id">, actor?: string) {
   const data = await apiRequest<{ medicine: MedicineRecord }>("/medicines/", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, actor }),
   });
 
   return data.medicine;
 }
 
-export async function updateMedicine(id: number, payload: Omit<MedicineRecord, "id">) {
+export async function updateMedicine(
+  id: number,
+  payload: Omit<MedicineRecord, "id">,
+  actor?: string
+) {
   const data = await apiRequest<{ medicine: MedicineRecord }>(`/medicines/${id}/`, {
     method: "PUT",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, actor }),
   });
 
   return data.medicine;
 }
 
-export async function deleteMedicine(id: number) {
+export async function deleteMedicine(id: number, actor?: string) {
   await apiRequest<void>(`/medicines/${id}/`, {
     method: "DELETE",
+    body: JSON.stringify({ actor }),
   });
 }
 
@@ -205,11 +222,12 @@ export async function fetchOrders() {
 }
 
 export async function createOrder(
-  payload: Omit<OrderRecord, "id">
+  payload: Omit<OrderRecord, "id">,
+  actor?: string
 ) {
   const data = await apiRequest<{ order: OrderRecord }>("/orders/create/", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, actor }),
   });
 
   return data.order;
@@ -217,19 +235,21 @@ export async function createOrder(
 
 export async function updateOrder(
   id: number,
-  payload: Partial<Pick<OrderRecord, "status" | "priority" | "assignedTo">>
+  payload: Partial<Pick<OrderRecord, "status" | "priority" | "assignedTo">>,
+  actor?: string
 ) {
   const data = await apiRequest<{ order: OrderRecord }>(`/orders/${id}/`, {
     method: "PATCH",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, actor }),
   });
 
   return data.order;
 }
 
-export async function deleteOrder(id: number) {
+export async function deleteOrder(id: number, actor?: string) {
   await apiRequest<void>(`/orders/${id}/`, {
     method: "DELETE",
+    body: JSON.stringify({ actor }),
   });
 }
 
@@ -237,10 +257,10 @@ export async function fetchSales() {
   return apiRequest<{ sales: SaleRecord[]; stats: DashboardStat[] }>("/sales/");
 }
 
-export async function createSale(payload: Omit<SaleRecord, "id">) {
+export async function createSale(payload: Omit<SaleRecord, "id">, actor?: string) {
   const data = await apiRequest<{ sale: SaleRecord }>("/sales/create/", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, actor }),
   });
 
   return data.sale;
@@ -248,19 +268,21 @@ export async function createSale(payload: Omit<SaleRecord, "id">) {
 
 export async function updateSale(
   id: number,
-  payload: Partial<Pick<SaleRecord, "status" | "paymentMethod">>
+  payload: Partial<Pick<SaleRecord, "status" | "paymentMethod">>,
+  actor?: string
 ) {
   const data = await apiRequest<{ sale: SaleRecord }>(`/sales/${id}/`, {
     method: "PATCH",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, actor }),
   });
 
   return data.sale;
 }
 
-export async function deleteSale(id: number) {
+export async function deleteSale(id: number, actor?: string) {
   await apiRequest<void>(`/sales/${id}/`, {
     method: "DELETE",
+    body: JSON.stringify({ actor }),
   });
 }
 

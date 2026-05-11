@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import {
   createOrder,
@@ -27,7 +28,9 @@ const emptyForm: OrderForm = {
 };
 
 function OrdersPage() {
+  const { user } = useAuth();
   const { showToast } = useToast();
+  const actor = user?.name ?? user?.email ?? "System";
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [stats, setStats] = useState<DashboardStat[]>([]);
   const [form, setForm] = useState<OrderForm>(emptyForm);
@@ -95,7 +98,7 @@ function OrdersPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
-      const createdOrder = await createOrder(form);
+      const createdOrder = await createOrder(form, actor);
       setOrders((current) => [createdOrder, ...current]);
       setForm(emptyForm);
       setStats((current) => recalculateOrderStats([createdOrder, ...orders], current));
@@ -107,7 +110,7 @@ function OrdersPage() {
 
   const handleStatusChange = async (id: number, status: OrderStatus) => {
     try {
-      const nextOrder = await updateOrder(id, { status });
+      const nextOrder = await updateOrder(id, { status }, actor);
       const nextOrders = orders.map((order) => (order.id === id ? nextOrder : order));
       setOrders(nextOrders);
       setStats((current) => recalculateOrderStats(nextOrders, current));
@@ -119,7 +122,7 @@ function OrdersPage() {
 
   const handlePriorityChange = async (id: number, priority: OrderPriority) => {
     try {
-      const nextOrder = await updateOrder(id, { priority });
+      const nextOrder = await updateOrder(id, { priority }, actor);
       setOrders((current) => current.map((order) => (order.id === id ? nextOrder : order)));
       showToast("Order priority updated successfully.", "success");
     } catch {
@@ -129,7 +132,7 @@ function OrdersPage() {
 
   const handleDelete = async (id: number) => {
     try {
-      await deleteOrder(id);
+      await deleteOrder(id, actor);
       const nextOrders = orders.filter((order) => order.id !== id);
       setOrders(nextOrders);
       setStats((current) => recalculateOrderStats(nextOrders, current));

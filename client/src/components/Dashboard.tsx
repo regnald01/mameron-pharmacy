@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { useOutletContext } from "react-router-dom";
 
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import {
   createUser,
@@ -36,6 +37,7 @@ function Dashboard() {
 }
 
 function AdminDashboard() {
+  const { user } = useAuth();
   const { showToast } = useToast();
   const [users, setUsers] = useState<AdminUserRecord[]>([]);
   const [activities, setActivities] = useState<ActivityRecord[]>([]);
@@ -52,6 +54,7 @@ function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState<UserStatus | "All">("All");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const actor = user?.name ?? user?.email ?? "System";
 
   const loadDashboard = useCallback(
     async (active = true) => {
@@ -103,35 +106,6 @@ function AdminDashboard() {
     });
   }, [search, statusFilter, users]);
 
-  const nextStats = (nextUsers: AdminUserRecord[], nextActivities: ActivityRecord[] = activities) => {
-    const unresolvedActivities = nextActivities.filter((activity) => !activity.reviewed).length;
-    const activeUsers = nextUsers.filter((user) => user.status === "Active").length;
-    const pendingUsers = nextUsers.filter((user) => user.status === "Pending").length;
-
-    return [
-      {
-        label: "Total users",
-        value: String(nextUsers.length),
-        description: `${activeUsers} currently active in the workspace`,
-      },
-      {
-        label: "Pending approvals",
-        value: String(pendingUsers),
-        description: "Accounts waiting for activation or review",
-      },
-      {
-        label: "Open alerts",
-        value: String(unresolvedActivities),
-        description: "Activity items still waiting for an admin check",
-      },
-      {
-        label: "Audit coverage",
-        value: "98%",
-        description: "Recent system actions captured in the log feed",
-      },
-    ];
-  };
-
   const handleNewUserChange = (
     event: ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -144,7 +118,7 @@ function AdminDashboard() {
   const handleCreateUser = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
-      await createUser(newUser);
+      await createUser(newUser, actor);
       await loadDashboard();
       setNewUser({
         name: "",
@@ -162,7 +136,7 @@ function AdminDashboard() {
 
   const updateUserStatus = async (id: number, status: UserStatus) => {
     try {
-      await updateUser(id, { status });
+      await updateUser(id, { status }, actor);
       await loadDashboard();
       showToast("User status updated successfully.", "success");
     } catch {
@@ -172,7 +146,7 @@ function AdminDashboard() {
 
   const updateUserRole = async (id: number, role: UserRole) => {
     try {
-      await updateUser(id, { role });
+      await updateUser(id, { role }, actor);
       await loadDashboard();
       showToast("User role updated successfully.", "success");
     } catch {
@@ -182,7 +156,7 @@ function AdminDashboard() {
 
   const removeUser = async (id: number) => {
     try {
-      await deleteUser(id);
+      await deleteUser(id, actor);
       await loadDashboard();
       showToast("User deleted successfully.", "info");
     } catch {

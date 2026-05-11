@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import {
   createSale,
@@ -27,7 +28,9 @@ const emptyForm: SaleForm = {
 };
 
 function SalesPage() {
+  const { user } = useAuth();
   const { showToast } = useToast();
+  const actor = user?.name ?? user?.email ?? "System";
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [stats, setStats] = useState<DashboardStat[]>([]);
   const [form, setForm] = useState<SaleForm>(emptyForm);
@@ -96,7 +99,7 @@ function SalesPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
-      const createdSale = await createSale(form);
+      const createdSale = await createSale(form, actor);
       const nextSales = [createdSale, ...sales];
       setSales(nextSales);
       setStats(recalculateSaleStats(nextSales));
@@ -109,7 +112,7 @@ function SalesPage() {
 
   const handleStatusChange = async (id: number, status: SaleStatus) => {
     try {
-      const nextSale = await updateSale(id, { status });
+      const nextSale = await updateSale(id, { status }, actor);
       const nextSales = sales.map((sale) => (sale.id === id ? nextSale : sale));
       setSales(nextSales);
       setStats(recalculateSaleStats(nextSales));
@@ -121,7 +124,7 @@ function SalesPage() {
 
   const handlePaymentChange = async (id: number, paymentMethod: PaymentMethod) => {
     try {
-      const nextSale = await updateSale(id, { paymentMethod });
+      const nextSale = await updateSale(id, { paymentMethod }, actor);
       setSales((current) => current.map((sale) => (sale.id === id ? nextSale : sale)));
       showToast("Payment method updated successfully.", "success");
     } catch {
@@ -131,7 +134,7 @@ function SalesPage() {
 
   const handleDelete = async (id: number) => {
     try {
-      await deleteSale(id);
+      await deleteSale(id, actor);
       const nextSales = sales.filter((sale) => sale.id !== id);
       setSales(nextSales);
       setStats(recalculateSaleStats(nextSales));
