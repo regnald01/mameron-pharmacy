@@ -127,6 +127,14 @@
   gap: 14px;
 }
 
+.navbar__left,
+.navbar__right,
+.panel__header,
+.toolbar,
+.user-cell {
+  min-width: 0;
+}
+
 .navbar__left h1,
 .dashboard-hero h2,
 .panel h3,
@@ -142,6 +150,15 @@
   gap: 4px;
   color: #475569;
   font-size: 0.92rem;
+}
+
+.navbar__meta span,
+.navbar__meta strong,
+.admin-badge strong,
+.admin-badge p,
+.user-cell strong,
+.user-cell p {
+  overflow-wrap: anywhere;
 }
 
 .role-switcher {
@@ -238,6 +255,8 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .hero-action-group {
@@ -386,8 +405,23 @@
   background: #ffffff;
 }
 
+.toolbar {
+  flex-wrap: wrap;
+}
+
+.toolbar > * {
+  min-width: 0;
+}
+
+.toolbar input,
+.toolbar select {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
 .table-wrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .data-table {
@@ -588,6 +622,7 @@
   .sidebar,
   .sidebar.collapsed {
     width: auto;
+    padding: 20px 18px;
   }
 
   .navbar,
@@ -600,6 +635,10 @@
   .panel__header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .dashboard-hero {
+    padding: 22px;
   }
 
   .stats-grid,
@@ -616,5 +655,92 @@
   .role-switcher,
   .navbar__meta {
     align-items: flex-start;
+  }
+
+  .dashboard-hero__actions,
+  .hero-action-group,
+  .hero-action-group .button,
+  .notification-button {
+    width: 100%;
+  }
+
+  .hero-action-menu {
+    left: 0;
+    right: auto;
+    width: min(100%, 320px);
+  }
+
+  .toolbar,
+  .pagination-actions,
+  .activity-card__top,
+  .activity-card__footer {
+    align-items: stretch;
+  }
+
+  .toolbar input,
+  .toolbar select,
+  .toolbar button,
+  .pagination-actions .button,
+  .row-actions .button,
+  .row-actions select {
+    width: 100%;
+  }
+
+  .admin-badge {
+    width: 100%;
+  }
+
+  .user-cell {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .sidebar {
+    gap: 18px;
+  }
+
+  .menu li a {
+    padding: 11px 12px;
+  }
+
+  .navbar {
+    padding: 18px 16px 14px;
+  }
+
+  .content {
+    padding: 0 16px 24px;
+  }
+
+  .panel,
+  .stat-card,
+  .dashboard-hero {
+    border-radius: 22px;
+  }
+
+  .panel {
+    padding: 18px;
+  }
+
+  .panel__header {
+    gap: 12px;
+  }
+
+  .dashboard-hero__actions {
+    gap: 10px;
+  }
+
+  .pagination-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pagination-actions span {
+    text-align: center;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 14px 10px;
   }
 }
