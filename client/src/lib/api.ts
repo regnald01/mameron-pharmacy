@@ -30,6 +30,15 @@ export interface AdminUserRecord {
   lastActive: string;
 }
 
+export interface AdminUserUpdatePayload {
+  name?: string;
+  email?: string;
+  password?: string;
+  role?: AdminUserRecord["role"];
+  status?: AdminUserRecord["status"];
+  lastActive?: string;
+}
+
 export interface ActivityRecord {
   id: number;
   actor: string;
@@ -144,7 +153,7 @@ export async function fetchDashboard(role: AppRole) {
 
 export async function updateUser(
   id: number,
-  payload: Partial<Pick<AdminUserRecord, "role" | "status">>,
+  payload: AdminUserUpdatePayload,
   actor?: string
 ) {
   const data = await apiRequest<{ user: AdminUserRecord }>(`/users/${id}/`, {

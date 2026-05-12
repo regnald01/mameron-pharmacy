@@ -63,6 +63,15 @@ function AdminDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [showInviteOptions, setShowInviteOptions] = useState(false);
   const [showExportOptions, setShowExportOptions] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<number | null>(null);
+  const [editUser, setEditUser] = useState({
+    name: "",
+    email: "",
+    password: "",
+    role: "Support" as UserRole,
+    status: "Pending" as UserStatus,
+    lastActive: "",
+  });
   const actor = user?.name ?? user?.email ?? "System";
   const heroActionsRef = useRef<HTMLDivElement | null>(null);
   const inviteFormRef = useRef<HTMLFormElement | null>(null);
@@ -354,6 +363,61 @@ function AdminDashboard() {
     showToast("Activity log exported as Excel.", "success");
   };
 
+  const startEditingUser = (userRecord: AdminUserRecord) => {
+    setEditingUserId(userRecord.id);
+    setEditUser({
+      name: userRecord.name,
+      email: userRecord.email,
+      password: "",
+      role: userRecord.role,
+      status: userRecord.status,
+      lastActive: userRecord.lastActive,
+    });
+  };
+
+  const cancelEditingUser = () => {
+    setEditingUserId(null);
+    setEditUser({
+      name: "",
+      email: "",
+      password: "",
+      role: "Support",
+      status: "Pending",
+      lastActive: "",
+    });
+  };
+
+  const handleEditUserChange = (
+    event: ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    setEditUser((current) => ({
+      ...current,
+      [event.target.name]: event.target.value,
+    }));
+  };
+
+  const saveEditedUser = async (id: number) => {
+    try {
+      await updateUser(
+        id,
+        {
+          name: editUser.name,
+          email: editUser.email,
+          password: editUser.password || undefined,
+          role: editUser.role,
+          status: editUser.status,
+          lastActive: editUser.lastActive,
+        },
+        actor
+      );
+      await loadDashboard();
+      cancelEditingUser();
+      showToast("User updated successfully.", "success");
+    } catch {
+      showToast("Unable to update user right now.", "error");
+    }
+  };
+
   if (loading) {
     return (
       <section className="dashboard-page">
@@ -506,64 +570,151 @@ function AdminDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {paginatedUsers.map((user) => (
-                  <tr key={user.id}>
-                    <td>
-                      <div className="user-cell">
-                        <div className="user-avatar">{user.name.slice(0, 2).toUpperCase()}</div>
-                        <div>
-                          <strong>{user.name}</strong>
-                          <p>{user.email}</p>
+                {paginatedUsers.map((user) => {
+                  const isEditing = editingUserId === user.id;
+
+                  return (
+                    <tr key={user.id}>
+                      <td>
+                        <div className="user-cell">
+                          <div className="user-avatar">{user.name.slice(0, 2).toUpperCase()}</div>
+                          <div>
+                            {isEditing ? (
+                              <>
+                                <input
+                                  name="name"
+                                  value={editUser.name}
+                                  onChange={handleEditUserChange}
+                                  placeholder="Full name"
+                                />
+                                <input
+                                  name="email"
+                                  type="email"
+                                  value={editUser.email}
+                                  onChange={handleEditUserChange}
+                                  placeholder="Email address"
+                                />
+                                <input
+                                  name="password"
+                                  type="password"
+                                  value={editUser.password}
+                                  onChange={handleEditUserChange}
+                                  placeholder="New password"
+                                />
+                              </>
+                            ) : (
+                              <>
+                                <strong>{user.name}</strong>
+                                <p>{user.email}</p>
+                              </>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td>
-                      <select
-                        value={user.role}
-                        onChange={(event) => void updateUserRole(user.id, event.target.value as UserRole)}
-                      >
-                        <option value="Admin">Admin</option>
-                        <option value="Pharmacist">Pharmacist</option>
-                        <option value="Cashier">Cashier</option>
-                        <option value="Support">Support</option>
-                      </select>
-                    </td>
-                    <td>
-                      <span className={`badge badge--${user.status.toLowerCase()}`}>{user.status}</span>
-                    </td>
-                    <td>{user.lastActive}</td>
-                    <td>
-                      <div className="row-actions">
-                        <button
-                          type="button"
-                          className="button button--ghost"
-                          onClick={() =>
-                            void updateUserStatus(
-                              user.id,
-                              user.status === "Suspended" ? "Active" : "Suspended"
-                            )
+                      </td>
+                      <td>
+                        <select
+                          name="role"
+                          value={isEditing ? editUser.role : user.role}
+                          onChange={(event) =>
+                            isEditing
+                              ? handleEditUserChange(event)
+                              : void updateUserRole(user.id, event.target.value as UserRole)
                           }
                         >
-                          {user.status === "Suspended" ? "Activate" : "Suspend"}
-                        </button>
-                        <button
-                          type="button"
-                          className="button button--ghost"
-                          onClick={() => void updateUserStatus(user.id, "Active")}
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          className="button button--ghost"
-                          onClick={() => void removeUser(user.id)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          <option value="Admin">Admin</option>
+                          <option value="Pharmacist">Pharmacist</option>
+                          <option value="Cashier">Cashier</option>
+                          <option value="Support">Support</option>
+                        </select>
+                      </td>
+                      <td>
+                        {isEditing ? (
+                          <select
+                            name="status"
+                            value={editUser.status}
+                            onChange={handleEditUserChange}
+                          >
+                            <option value="Active">Active</option>
+                            <option value="Pending">Pending</option>
+                            <option value="Suspended">Suspended</option>
+                          </select>
+                        ) : (
+                          <span className={`badge badge--${user.status.toLowerCase()}`}>{user.status}</span>
+                        )}
+                      </td>
+                      <td>
+                        {isEditing ? (
+                          <input
+                            name="lastActive"
+                            value={editUser.lastActive}
+                            onChange={handleEditUserChange}
+                            placeholder="Last active"
+                          />
+                        ) : (
+                          user.lastActive
+                        )}
+                      </td>
+                      <td>
+                        <div className="row-actions">
+                          {isEditing ? (
+                            <>
+                              <button
+                                type="button"
+                                className="button button--ghost"
+                                onClick={() => void saveEditedUser(user.id)}
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                className="button button--ghost"
+                                onClick={cancelEditingUser}
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                className="button button--ghost"
+                                onClick={() => startEditingUser(user)}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="button button--ghost"
+                                onClick={() =>
+                                  void updateUserStatus(
+                                    user.id,
+                                    user.status === "Suspended" ? "Active" : "Suspended"
+                                  )
+                                }
+                              >
+                                {user.status === "Suspended" ? "Activate" : "Suspend"}
+                              </button>
+                              <button
+                                type="button"
+                                className="button button--ghost"
+                                onClick={() => void updateUserStatus(user.id, "Active")}
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                className="button button--ghost"
+                                onClick={() => void removeUser(user.id)}
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

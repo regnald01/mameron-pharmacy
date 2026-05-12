@@ -38,11 +38,14 @@ function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
-    const savedUser = window.localStorage.getItem(STORAGE_KEY);
+    const savedUser = window.sessionStorage.getItem(STORAGE_KEY);
 
     if (savedUser) {
       setUser(JSON.parse(savedUser) as AuthUser);
     }
+
+    // Clear legacy persistent auth so old sessions do not bypass login.
+    window.localStorage.removeItem(STORAGE_KEY);
   }, []);
 
   const value = useMemo<AuthContextValue>(
@@ -50,10 +53,12 @@ function AuthProvider({ children }: { children: ReactNode }) {
       user,
       login: async (payload) => {
         const nextUser = await loginRequest(payload);
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser));
+        window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser));
+        window.localStorage.removeItem(STORAGE_KEY);
         setUser(nextUser);
       },
       logout: () => {
+        window.sessionStorage.removeItem(STORAGE_KEY);
         window.localStorage.removeItem(STORAGE_KEY);
         setUser(null);
       },
