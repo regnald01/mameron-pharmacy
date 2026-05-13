@@ -6,6 +6,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 import { ToastProvider } from "./context/ToastContext";
 import Home from "./pages/Home";
+import ItemsPage from "./pages/ItemsPage";
 import Login from "./pages/Login";
 import OrdersPage from "./pages/OrdersPage";
 import SalesPage from "./pages/SalesPage";
@@ -31,6 +32,7 @@ function App() {
                 path="orders"
                 element={<OrdersPage />}
               />
+              <Route path="items" element={<ItemsPage />} />
               <Route path="products" element={<Medicines />} />
               <Route path="stock" element={<StockPage />} />
               <Route path="sales" element={<SalesPage />} />

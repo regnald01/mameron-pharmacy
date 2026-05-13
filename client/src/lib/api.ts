@@ -63,6 +63,11 @@ export interface MedicineRecord {
   expiryDate: string;
 }
 
+export interface MedicineItemRecord {
+  id: number;
+  name: string;
+}
+
 export interface OrderRecord {
   id: number;
   customerName: string;
@@ -197,6 +202,11 @@ export async function fetchMedicines() {
   return data.medicines;
 }
 
+export async function fetchMedicineItems() {
+  const data = await apiRequest<{ items: MedicineItemRecord[] }>("/items/");
+  return data.items;
+}
+
 export async function createMedicine(payload: Omit<MedicineRecord, "id">, actor?: string) {
   const data = await apiRequest<{ medicine: MedicineRecord }>("/medicines/", {
     method: "POST",
@@ -221,6 +231,38 @@ export async function updateMedicine(
 
 export async function deleteMedicine(id: number, actor?: string) {
   await apiRequest<void>(`/medicines/${id}/`, {
+    method: "DELETE",
+    body: JSON.stringify({ actor }),
+  });
+}
+
+export async function createMedicineItem(
+  payload: Omit<MedicineItemRecord, "id">,
+  actor?: string
+) {
+  const data = await apiRequest<{ item: MedicineItemRecord }>("/items/", {
+    method: "POST",
+    body: JSON.stringify({ ...payload, actor }),
+  });
+
+  return data.item;
+}
+
+export async function updateMedicineItem(
+  id: number,
+  payload: Omit<MedicineItemRecord, "id">,
+  actor?: string
+) {
+  const data = await apiRequest<{ item: MedicineItemRecord }>(`/items/${id}/`, {
+    method: "PATCH",
+    body: JSON.stringify({ ...payload, actor }),
+  });
+
+  return data.item;
+}
+
+export async function deleteMedicineItem(id: number, actor?: string) {
+  await apiRequest<void>(`/items/${id}/`, {
     method: "DELETE",
     body: JSON.stringify({ actor }),
   });

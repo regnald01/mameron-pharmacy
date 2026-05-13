@@ -6,10 +6,11 @@ import { useToast } from "../context/ToastContext";
 import {
   createMedicine,
   deleteMedicine,
+  fetchMedicineItems,
   fetchMedicines,
   updateMedicine,
 } from "../lib/api";
-import type { MedicineRecord } from "../lib/api";
+import type { MedicineItemRecord, MedicineRecord } from "../lib/api";
 
 type MedicineForm = Omit<MedicineRecord, "id">;
 const MEDICINES_PER_PAGE = 6;
@@ -27,6 +28,7 @@ function Medicines() {
   const { showToast } = useToast();
   const actor = user?.name ?? user?.email ?? "System";
   const [medicines, setMedicines] = useState<MedicineRecord[]>([]);
+  const [medicineItems, setMedicineItems] = useState<MedicineItemRecord[]>([]);
   const [form, setForm] = useState<MedicineForm>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,8 +43,12 @@ function Medicines() {
       }
 
       try {
-        const data = await fetchMedicines();
-        setMedicines(data);
+        const [medicinesData, itemsData] = await Promise.all([
+          fetchMedicines(),
+          fetchMedicineItems(),
+        ]);
+        setMedicines(medicinesData);
+        setMedicineItems(itemsData);
         setError(null);
       } catch {
         setError("Unable to load medicines right now.");
@@ -105,7 +111,20 @@ function Medicines() {
     }
   }, [currentPage, totalPages]);
 
-  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const medicineNameOptions = useMemo(() => {
+    if (!form.name) {
+      return medicineItems;
+    }
+
+    const hasCurrentName = medicineItems.some((item) => item.name === form.name);
+    if (hasCurrentName) {
+      return medicineItems;
+    }
+
+    return [...medicineItems, { id: -1, name: form.name }];
+  }, [form.name, medicineItems]);
+
+  const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm({ ...form, [event.target.name]: event.target.value });
   };
 
@@ -181,13 +200,21 @@ function Medicines() {
       </div>
 
       <form onSubmit={handleSubmit} style={formStyle}>
-        <input
+        <select
           name="name"
-          placeholder="Medicine name"
           value={form.name}
           onChange={handleChange}
           required
-        />
+        >
+          <option value="" disabled>
+            Select medicine name
+          </option>
+          {medicineNameOptions.map((item) => (
+            <option key={item.id} value={item.name}>
+              {item.name}
+            </option>
+          ))}
+        </select>
         <input
           name="purchasePrice"
           type="number"

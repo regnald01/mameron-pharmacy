@@ -8,10 +8,11 @@ import { useToast } from "../context/ToastContext";
 import {
   createOrder,
   deleteOrder,
+  fetchMedicineItems,
   fetchOrders,
   updateOrder,
 } from "../lib/api";
-import type { DashboardStat, OrderRecord } from "../lib/api";
+import type { DashboardStat, MedicineItemRecord, OrderRecord } from "../lib/api";
 
 type OrderStatus = OrderRecord["status"];
 type OrderPriority = OrderRecord["priority"];
@@ -35,6 +36,7 @@ function OrdersPage() {
   const { showToast } = useToast();
   const actor = user?.name ?? user?.email ?? "System";
   const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [medicineItems, setMedicineItems] = useState<MedicineItemRecord[]>([]);
   const [stats, setStats] = useState<DashboardStat[]>([]);
   const [form, setForm] = useState<OrderForm>(emptyForm);
   const [search, setSearch] = useState("");
@@ -53,9 +55,13 @@ function OrdersPage() {
       }
 
       try {
-        const data = await fetchOrders();
-        setOrders(data.orders);
-        setStats(data.stats);
+        const [ordersData, itemsData] = await Promise.all([
+          fetchOrders(),
+          fetchMedicineItems(),
+        ]);
+        setOrders(ordersData.orders);
+        setStats(ordersData.stats);
+        setMedicineItems(itemsData);
         setError(null);
       } catch {
         setError("Unable to load orders right now.");
@@ -392,13 +398,21 @@ function OrdersPage() {
             onChange={handleChange}
             required
           />
-          <input
+          <select
             name="medicineName"
-            placeholder="Medicine"
             value={form.medicineName}
             onChange={handleChange}
             required
-          />
+          >
+            <option value="" disabled>
+              Select medicine
+            </option>
+            {medicineItems.map((item) => (
+              <option key={item.id} value={item.name}>
+                {item.name}
+              </option>
+            ))}
+          </select>
           <input
             name="quantity"
             type="number"

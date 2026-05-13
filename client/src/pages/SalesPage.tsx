@@ -9,10 +9,11 @@ import { useToast } from "../context/ToastContext";
 import {
   createSale,
   deleteSale,
+  fetchMedicineItems,
   fetchSales,
   updateSale,
 } from "../lib/api";
-import type { DashboardStat, SaleRecord } from "../lib/api";
+import type { DashboardStat, MedicineItemRecord, SaleRecord } from "../lib/api";
 
 type SaleStatus = SaleRecord["status"];
 type PaymentMethod = SaleRecord["paymentMethod"];
@@ -36,6 +37,7 @@ function SalesPage() {
   const { showToast } = useToast();
   const actor = user?.name ?? user?.email ?? "System";
   const [sales, setSales] = useState<SaleRecord[]>([]);
+  const [medicineItems, setMedicineItems] = useState<MedicineItemRecord[]>([]);
   const [stats, setStats] = useState<DashboardStat[]>([]);
   const [form, setForm] = useState<SaleForm>(emptyForm);
   const [search, setSearch] = useState("");
@@ -53,9 +55,13 @@ function SalesPage() {
       }
 
       try {
-        const data = await fetchSales();
-        setSales(data.sales);
-        setStats(data.stats);
+        const [salesData, itemsData] = await Promise.all([
+          fetchSales(),
+          fetchMedicineItems(),
+        ]);
+        setSales(salesData.sales);
+        setStats(salesData.stats);
+        setMedicineItems(itemsData);
         setError(null);
       } catch {
         setError("Unable to load sales right now.");
@@ -567,13 +573,21 @@ function SalesPage() {
             onChange={handleChange}
             required
           />
-          <input
+          <select
             name="medicineName"
-            placeholder="Medicine"
             value={form.medicineName}
             onChange={handleChange}
             required
-          />
+          >
+            <option value="" disabled>
+              Select medicine
+            </option>
+            {medicineItems.map((item) => (
+              <option key={item.id} value={item.name}>
+                {item.name}
+              </option>
+            ))}
+          </select>
           <input
             name="units"
             type="number"
