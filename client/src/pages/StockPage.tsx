@@ -1,16 +1,33 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import { FiFileText } from "react-icons/fi";
 import { HiOutlineTableCells } from "react-icons/hi2";
 
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { fetchMedicines } from "../lib/api";
-import type { MedicineRecord } from "../lib/api";
+import {
+  fetchMedicineItems,
+  fetchStockRecords,
+  saveStockMovement,
+} from "../lib/api";
+import type { MedicineItemRecord, StockRecord } from "../lib/api";
 
 const STOCK_ITEMS_PER_PAGE = 6;
 
+const emptyForm = {
+  medicineItemId: "",
+  quantity: "",
+  operation: "add" as "add" | "deduct",
+  expiryDate: "",
+};
+
 function StockPage() {
+  const { user } = useAuth();
   const { showToast } = useToast();
-  const [medicines, setMedicines] = useState<MedicineRecord[]>([]);
+  const actor = user?.name ?? user?.email ?? "System";
+  const [stockRecords, setStockRecords] = useState<StockRecord[]>([]);
+  const [medicineItems, setMedicineItems] = useState<MedicineItemRecord[]>([]);
+  const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showReportOptions, setShowReportOptions] = useState(false);
@@ -18,37 +35,46 @@ function StockPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const heroActionsRef = useRef<HTMLDivElement | null>(null);
 
+  const loadStock = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!options?.silent) {
+        setLoading(true);
+      }
+
+      try {
+        const [stocks, items] = await Promise.all([
+          fetchStockRecords(),
+          fetchMedicineItems(),
+        ]);
+        setStockRecords(stocks);
+        setMedicineItems(items);
+        setError(null);
+      } catch {
+        setError("Unable to load stock right now.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     let active = true;
 
-    const loadStock = async () => {
-      try {
-        const data = await fetchMedicines();
-        if (!active) {
-          return;
-        }
-
-        setMedicines(data);
-        setError(null);
-      } catch {
-        if (!active) {
-          return;
-        }
-
-        setError("Unable to load stock right now.");
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
+    const syncStock = async () => {
+      if (!active) {
+        return;
       }
+
+      await loadStock();
     };
 
-    void loadStock();
+    void syncStock();
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [loadStock]);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -73,46 +99,46 @@ function StockPage() {
   }, []);
 
   const stockStats = useMemo(() => {
-    const totalItems = medicines.length;
-    const totalUnits = medicines.reduce(
-      (sum, medicine) => sum + Number(medicine.quantity),
+    const totalItems = stockRecords.length;
+    const totalUnits = stockRecords.reduce(
+      (sum, record) => sum + Number(record.stockBalance),
       0
     );
-    const lowStock = medicines.filter((medicine) => Number(medicine.quantity) <= 50).length;
-    const expiringSoon = medicines.filter((medicine) =>
-      willExpireSoon(medicine.expiryDate)
+    const lowStock = stockRecords.filter((record) => Number(record.stockBalance) <= 50).length;
+    const expiringSoon = stockRecords.filter((record) =>
+      willExpireSoon(record.expiryDate)
     ).length;
 
     return { totalItems, totalUnits, lowStock, expiringSoon };
-  }, [medicines]);
+  }, [stockRecords]);
 
   const lowStockItems = useMemo(
-    () => medicines.filter((medicine) => Number(medicine.quantity) <= 50),
-    [medicines]
+    () => stockRecords.filter((record) => Number(record.stockBalance) <= 50),
+    [stockRecords]
   );
 
   const expiredCount = useMemo(
-    () => medicines.filter((medicine) => isExpired(medicine.expiryDate)).length,
-    [medicines]
+    () => stockRecords.filter((record) => isExpired(record.expiryDate)).length,
+    [stockRecords]
   );
 
-  const visibleMedicines = useMemo(() => {
+  const visibleStockRecords = useMemo(() => {
     if (!showExpiredOnly) {
-      return medicines;
+      return stockRecords;
     }
 
-    return medicines.filter((medicine) => isExpired(medicine.expiryDate));
-  }, [medicines, showExpiredOnly]);
+    return stockRecords.filter((record) => isExpired(record.expiryDate));
+  }, [stockRecords, showExpiredOnly]);
 
   const totalPages = Math.max(
     1,
-    Math.ceil(visibleMedicines.length / STOCK_ITEMS_PER_PAGE)
+    Math.ceil(visibleStockRecords.length / STOCK_ITEMS_PER_PAGE)
   );
 
-  const paginatedMedicines = useMemo(() => {
+  const paginatedStockRecords = useMemo(() => {
     const start = (currentPage - 1) * STOCK_ITEMS_PER_PAGE;
-    return visibleMedicines.slice(start, start + STOCK_ITEMS_PER_PAGE);
-  }, [currentPage, visibleMedicines]);
+    return visibleStockRecords.slice(start, start + STOCK_ITEMS_PER_PAGE);
+  }, [currentPage, visibleStockRecords]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -129,23 +155,23 @@ function StockPage() {
   };
 
   const exportStockCsv = () => {
-    if (medicines.length === 0) {
+    if (stockRecords.length === 0) {
       showToast("There is no stock data to export.", "info");
       return;
     }
 
-    const headers = ["Medicine", "Stock", "Status", "Expiry", "Selling Price"];
-    const rows = medicines.map((medicine) => {
-      const quantity = Number(medicine.quantity);
+    const headers = ["Medicine", "Total Item", "Stock Balance", "Status", "Expiry"];
+    const rows = stockRecords.map((record) => {
+      const quantity = Number(record.stockBalance);
       const stockLabel =
         quantity <= 20 ? "Critical" : quantity <= 50 ? "Low" : "Healthy";
 
       return [
-        medicine.name,
-        medicine.quantity,
+        record.medicineName,
+        record.totalItems,
+        record.stockBalance,
         stockLabel,
-        medicine.expiryDate,
-        medicine.sellingPrice,
+        record.expiryDate,
       ];
     });
 
@@ -155,24 +181,24 @@ function StockPage() {
   };
 
   const exportStockExcel = () => {
-    if (medicines.length === 0) {
+    if (stockRecords.length === 0) {
       showToast("There is no stock data to export.", "info");
       return;
     }
 
-    const rows = medicines
-      .map((medicine) => {
-        const quantity = Number(medicine.quantity);
+    const rows = stockRecords
+      .map((record) => {
+        const quantity = Number(record.stockBalance);
         const stockLabel =
           quantity <= 20 ? "Critical" : quantity <= 50 ? "Low" : "Healthy";
 
         return `
           <tr>
-            <td>${escapeHtml(medicine.name)}</td>
-            <td>${escapeHtml(medicine.quantity)}</td>
+            <td>${escapeHtml(record.medicineName)}</td>
+            <td>${escapeHtml(record.totalItems)}</td>
+            <td>${escapeHtml(record.stockBalance)}</td>
             <td>${escapeHtml(stockLabel)}</td>
-            <td>${escapeHtml(medicine.expiryDate)}</td>
-            <td>${escapeHtml(medicine.sellingPrice)}</td>
+            <td>${escapeHtml(record.expiryDate)}</td>
           </tr>
         `;
       })
@@ -185,10 +211,10 @@ function StockPage() {
           <thead>
             <tr>
               <th>Medicine</th>
-              <th>Stock</th>
+              <th>Total Item</th>
+              <th>Stock Balance</th>
               <th>Status</th>
               <th>Expiry</th>
-              <th>Selling Price</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
@@ -205,22 +231,66 @@ function StockPage() {
       return;
     }
 
-    const headers = ["Medicine", "Stock", "Status", "Expiry", "Selling Price"];
-    const rows = lowStockItems.map((medicine) => {
-      const quantity = Number(medicine.quantity);
+    const headers = ["Medicine", "Total Item", "Stock Balance", "Status", "Expiry"];
+    const rows = lowStockItems.map((record) => {
+      const quantity = Number(record.stockBalance);
       const stockLabel = quantity <= 20 ? "Critical" : "Low";
 
       return [
-        medicine.name,
-        medicine.quantity,
+        record.medicineName,
+        record.totalItems,
+        record.stockBalance,
         stockLabel,
-        medicine.expiryDate,
-        medicine.sellingPrice,
+        record.expiryDate,
       ];
     });
 
     downloadCsv(`reorder-list-${getTodayLabel()}.csv`, [headers, ...rows]);
     showToast("Reorder list exported successfully.", "success");
+  };
+
+  const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = event.target;
+    setForm((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleMedicineSelection = (event: ChangeEvent<HTMLSelectElement>) => {
+    const medicineItemId = event.target.value;
+    const selectedRecord = stockRecords.find(
+      (record) => String(record.medicineItemId) === medicineItemId
+    );
+
+    setForm((current) => ({
+      ...current,
+      medicineItemId,
+      expiryDate: selectedRecord?.expiryDate ?? current.expiryDate,
+    }));
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    try {
+      await saveStockMovement(
+        {
+          medicineItemId: Number(form.medicineItemId),
+          quantity: form.quantity,
+          operation: form.operation,
+          expiryDate: form.expiryDate,
+        },
+        actor
+      );
+      await loadStock({ silent: true });
+      setForm(emptyForm);
+      showToast(
+        form.operation === "add"
+          ? "Stock added successfully."
+          : "Stock deducted successfully.",
+        "success"
+      );
+    } catch {
+      showToast("Unable to update stock right now.", "error");
+    }
   };
 
   const toggleExpiredFilter = () => {
@@ -310,6 +380,60 @@ function StockPage() {
       <section className="panel panel--wide">
         <div className="panel__header">
           <div>
+            <p className="eyebrow">Stock Management</p>
+            <h3>Add or deduct inventory</h3>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="toolbar">
+          <select
+            name="medicineItemId"
+            value={form.medicineItemId}
+            onChange={handleMedicineSelection}
+            required
+          >
+            <option value="" disabled>
+              Select medicine item
+            </option>
+            {medicineItems.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+          <select
+            name="operation"
+            value={form.operation}
+            onChange={handleChange}
+          >
+            <option value="add">Add stock</option>
+            <option value="deduct">Deduct stock</option>
+          </select>
+          <input
+            name="quantity"
+            type="number"
+            min="1"
+            placeholder="Total item"
+            value={form.quantity}
+            onChange={handleChange}
+            required
+          />
+          <input
+            name="expiryDate"
+            type="date"
+            value={form.expiryDate}
+            onChange={handleChange}
+            required={form.operation === "add"}
+          />
+          <button type="submit" className="button button--primary">
+            {form.operation === "add" ? "Save stock" : "Deduct stock"}
+          </button>
+        </form>
+      </section>
+
+      <section className="panel panel--wide">
+        <div className="panel__header">
+          <div>
             <p className="eyebrow">Stock List</p>
             <h3>Current inventory levels</h3>
           </div>
@@ -328,40 +452,32 @@ function StockPage() {
             <thead>
               <tr>
                 <th>Medicine</th>
-                <th>Stock</th>
-                <th>Status</th>
+                <th>Total item</th>
+                <th>Stock balance</th>
                 <th>Expiry</th>
-                <th>Selling price</th>
               </tr>
             </thead>
             <tbody>
-              {paginatedMedicines.length === 0 ? (
+              {paginatedStockRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={5}>
+                  <td colSpan={4}>
                     {showExpiredOnly
                       ? "No expired medicines found."
                       : "No stock data available yet."}
                   </td>
                 </tr>
               ) : (
-                paginatedMedicines.map((medicine) => {
-                  const quantity = Number(medicine.quantity);
-                  const stockLabel =
-                    quantity <= 20 ? "Critical" : quantity <= 50 ? "Low" : "Healthy";
-                  const expiryTone = getExpiryTone(medicine.expiryDate);
+                paginatedStockRecords.map((record) => {
+                  const expiryTone = getExpiryTone(record.expiryDate);
 
                   return (
-                    <tr key={medicine.id}>
-                      <td>{medicine.name}</td>
-                      <td>{medicine.quantity}</td>
-                      <td>
-                        <span className={`badge badge--${stockLabel.toLowerCase()}`}>
-                          {stockLabel}
-                        </span>
-                      </td>
+                    <tr key={record.id}>
+                      <td>{record.medicineName}</td>
+                      <td>{record.totalItems}</td>
+                      <td>{record.stockBalance}</td>
                       <td>
                         <div className={`stock-expiry stock-expiry--${expiryTone}`}>
-                          <span>{medicine.expiryDate}</span>
+                          <span>{record.expiryDate}</span>
                           {expiryTone === "expired" ? (
                             <span className="stock-expiry__label">Expired</span>
                           ) : expiryTone === "soon" ? (
@@ -371,7 +487,6 @@ function StockPage() {
                           )}
                         </div>
                       </td>
-                      <td>{medicine.sellingPrice}</td>
                     </tr>
                   );
                 })
@@ -380,7 +495,7 @@ function StockPage() {
           </table>
         </div>
 
-        {visibleMedicines.length > 0 ? (
+        {visibleStockRecords.length > 0 ? (
           <div className="pagination-actions">
             <span>
               Page {currentPage} of {totalPages}

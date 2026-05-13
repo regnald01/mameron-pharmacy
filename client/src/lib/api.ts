@@ -68,6 +68,15 @@ export interface MedicineItemRecord {
   name: string;
 }
 
+export interface StockRecord {
+  id: number;
+  medicineItemId: number;
+  medicineName: string;
+  totalItems: string;
+  stockBalance: string;
+  expiryDate: string;
+}
+
 export interface OrderRecord {
   id: number;
   customerName: string;
@@ -207,6 +216,11 @@ export async function fetchMedicineItems() {
   return data.items;
 }
 
+export async function fetchStockRecords() {
+  const data = await apiRequest<{ stocks: StockRecord[] }>("/stock/");
+  return data.stocks;
+}
+
 export async function createMedicine(payload: Omit<MedicineRecord, "id">, actor?: string) {
   const data = await apiRequest<{ medicine: MedicineRecord }>("/medicines/", {
     method: "POST",
@@ -266,6 +280,23 @@ export async function deleteMedicineItem(id: number, actor?: string) {
     method: "DELETE",
     body: JSON.stringify({ actor }),
   });
+}
+
+export async function saveStockMovement(
+  payload: {
+    medicineItemId: number;
+    quantity: string;
+    operation: "add" | "deduct";
+    expiryDate?: string;
+  },
+  actor?: string
+) {
+  const data = await apiRequest<{ stock: StockRecord }>("/stock/", {
+    method: "POST",
+    body: JSON.stringify({ ...payload, actor }),
+  });
+
+  return data.stock;
 }
 
 export async function fetchOrders() {
