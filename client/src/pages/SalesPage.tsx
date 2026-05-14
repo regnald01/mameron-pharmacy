@@ -160,8 +160,11 @@ function SalesPage() {
       await loadSales({ silent: true });
       setForm(emptyForm);
       showToast("Sale recorded successfully.", "success");
-    } catch {
-      showToast("Unable to record sale right now.", "error");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Unable to record sale right now.",
+        "error"
+      );
     }
   };
 
@@ -170,8 +173,11 @@ function SalesPage() {
       await updateSale(id, { status }, actor);
       await loadSales({ silent: true });
       showToast("Sale status updated successfully.", "success");
-    } catch {
-      showToast("Unable to update sale status right now.", "error");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Unable to update sale status right now.",
+        "error"
+      );
     }
   };
 
@@ -190,8 +196,11 @@ function SalesPage() {
       await deleteSale(id, actor);
       await loadSales({ silent: true });
       showToast("Sale removed successfully.", "info");
-    } catch {
-      showToast("Unable to remove sale right now.", "error");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Unable to remove sale right now.",
+        "error"
+      );
     }
   };
 

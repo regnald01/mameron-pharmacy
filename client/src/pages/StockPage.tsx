@@ -288,8 +288,11 @@ function StockPage() {
           : "Stock deducted successfully.",
         "success"
       );
-    } catch {
-      showToast("Unable to update stock right now.", "error");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Unable to update stock right now.",
+        "error"
+      );
     }
   };
 

@@ -7,10 +7,11 @@ import {
   createMedicine,
   deleteMedicine,
   fetchMedicineItems,
+  fetchStockRecords,
   fetchMedicines,
   updateMedicine,
 } from "../lib/api";
-import type { MedicineItemRecord, MedicineRecord } from "../lib/api";
+import type { MedicineItemRecord, MedicineRecord, StockRecord } from "../lib/api";
 
 type MedicineForm = Omit<MedicineRecord, "id">;
 const MEDICINES_PER_PAGE = 6;
@@ -29,6 +30,7 @@ function Medicines() {
   const actor = user?.name ?? user?.email ?? "System";
   const [medicines, setMedicines] = useState<MedicineRecord[]>([]);
   const [medicineItems, setMedicineItems] = useState<MedicineItemRecord[]>([]);
+  const [stockRecords, setStockRecords] = useState<StockRecord[]>([]);
   const [form, setForm] = useState<MedicineForm>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,12 +45,14 @@ function Medicines() {
       }
 
       try {
-        const [medicinesData, itemsData] = await Promise.all([
+        const [medicinesData, itemsData, stockData] = await Promise.all([
           fetchMedicines(),
           fetchMedicineItems(),
+          fetchStockRecords(),
         ]);
         setMedicines(medicinesData);
         setMedicineItems(itemsData);
+        setStockRecords(stockData);
         setError(null);
       } catch {
         setError("Unable to load medicines right now.");
@@ -124,12 +128,36 @@ function Medicines() {
     return [...medicineItems, { id: -1, name: form.name }];
   }, [form.name, medicineItems]);
 
+  const stockRecordByMedicineName = useMemo(
+    () =>
+      new Map(stockRecords.map((record) => [record.medicineName, record])),
+    [stockRecords]
+  );
+
   const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setForm({ ...form, [event.target.name]: event.target.value });
+    const { name, value } = event.target;
+
+    if (name === "name") {
+      const selectedStock = stockRecordByMedicineName.get(value);
+      setForm((current) => ({
+        ...current,
+        name: value,
+        quantity: selectedStock?.stockBalance ?? "",
+        expiryDate: selectedStock?.expiryDate ?? "",
+      }));
+      return;
+    }
+
+    setForm((current) => ({ ...current, [name]: value }));
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (!form.expiryDate) {
+      showToast("Select a medicine item that already has an expiry date in stock.", "error");
+      return;
+    }
 
     try {
       if (editingId !== null) {
@@ -150,12 +178,14 @@ function Medicines() {
   };
 
   const handleEdit = (medicine: MedicineRecord) => {
+    const stockRecord = stockRecordByMedicineName.get(medicine.name);
+
     setForm({
       name: medicine.name,
       purchasePrice: medicine.purchasePrice,
       sellingPrice: medicine.sellingPrice,
-      quantity: medicine.quantity,
-      expiryDate: medicine.expiryDate,
+      quantity: stockRecord?.stockBalance ?? medicine.quantity,
+      expiryDate: stockRecord?.expiryDate ?? medicine.expiryDate,
     });
     setEditingId(medicine.id);
   };
@@ -236,14 +266,7 @@ function Medicines() {
           type="number"
           placeholder="Stock quantity"
           value={form.quantity}
-          onChange={handleChange}
-          required
-        />
-        <input
-          name="expiryDate"
-          type="date"
-          value={form.expiryDate}
-          onChange={handleChange}
+          readOnly
           required
         />
         <button type="submit" className="button button--primary">
@@ -273,35 +296,41 @@ function Medicines() {
                 </td>
               </tr>
             ) : (
-              paginatedMedicines.map((medicine) => (
-                <tr key={medicine.id}>
-                  <td>{medicine.name}</td>
-                  <td>{medicine.purchasePrice}</td>
-                  <td>{medicine.sellingPrice}</td>
-                  <td>{medicine.quantity}</td>
-                  <td style={{ color: isExpired(medicine.expiryDate) ? "#b91c1c" : "#334155" }}>
-                    {medicine.expiryDate}
-                  </td>
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="button button--ghost"
-                        onClick={() => handleEdit(medicine)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="button button--ghost"
-                        onClick={() => void handleDelete(medicine.id)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+              paginatedMedicines.map((medicine) => {
+                const stockRecord = stockRecordByMedicineName.get(medicine.name);
+                const stockQuantity = stockRecord?.stockBalance ?? medicine.quantity;
+                const expiryDate = stockRecord?.expiryDate ?? medicine.expiryDate;
+
+                return (
+                  <tr key={medicine.id}>
+                    <td>{medicine.name}</td>
+                    <td>{medicine.purchasePrice}</td>
+                    <td>{medicine.sellingPrice}</td>
+                    <td>{stockQuantity}</td>
+                    <td style={{ color: isExpired(expiryDate) ? "#b91c1c" : "#334155" }}>
+                      {expiryDate}
+                    </td>
+                    <td>
+                      <div className="row-actions">
+                        <button
+                          type="button"
+                          className="button button--ghost"
+                          onClick={() => handleEdit(medicine)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="button button--ghost"
+                          onClick={() => void handleDelete(medicine.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
