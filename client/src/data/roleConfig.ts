@@ -26,6 +26,7 @@ export const roleConfig: Record<AppRole, RoleMeta> = {
       { to: "/orders", label: "Orders", icon: "📦" },
       { to: "/products", label: "Medicines", icon: "💊" },
       { to: "/items", label: "Items", icon: "🧾" },
+      { to: "/reports", label: "Reports", icon: "📊" },
       { to: "/stock", label: "Stock", icon: "📋" },
       { to: "/sales", label: "Sales", icon: "📈" },
     ],
@@ -40,6 +41,7 @@ export const roleConfig: Record<AppRole, RoleMeta> = {
       { to: "/", label: "Dashboard", icon: "🏠" },
       { to: "/products", label: "Medicines", icon: "💊" },
       { to: "/items", label: "Items", icon: "🧾" },
+      { to: "/reports", label: "Reports", icon: "📊" },
       { to: "/stock", label: "Stock", icon: "📋" },
     ],
   },
@@ -51,6 +53,7 @@ export const roleConfig: Record<AppRole, RoleMeta> = {
       "Track shift performance, revenue, and payment activity without admin controls.",
     navItems: [
       { to: "/", label: "Dashboard", icon: "🏠" },
+      { to: "/reports", label: "Reports", icon: "📊" },
       { to: "/sales", label: "Sales", icon: "📈" },
     ],
   },
@@ -63,6 +66,7 @@ export const roleConfig: Record<AppRole, RoleMeta> = {
     navItems: [
       { to: "/", label: "Dashboard", icon: "🏠" },
       { to: "/orders", label: "Orders", icon: "📦" },
+      { to: "/reports", label: "Reports", icon: "📊" },
     ],
   },
 };

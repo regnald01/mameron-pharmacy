@@ -9,6 +9,7 @@ import Home from "./pages/Home";
 import ItemsPage from "./pages/ItemsPage";
 import Login from "./pages/Login";
 import OrdersPage from "./pages/OrdersPage";
+import ReportsPage from "./pages/ReportsPage";
 import SalesPage from "./pages/SalesPage";
 import StockPage from "./pages/StockPage";
 
@@ -34,6 +35,7 @@ function App() {
               />
               <Route path="items" element={<ItemsPage />} />
               <Route path="products" element={<Medicines />} />
+              <Route path="reports" element={<ReportsPage />} />
               <Route path="stock" element={<StockPage />} />
               <Route path="sales" element={<SalesPage />} />
             </Route>
