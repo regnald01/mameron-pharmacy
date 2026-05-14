@@ -8,12 +8,18 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import {
   createSale,
+  fetchMedicines,
   deleteSale,
   fetchMedicineItems,
   fetchSales,
   updateSale,
 } from "../lib/api";
-import type { DashboardStat, MedicineItemRecord, SaleRecord } from "../lib/api";
+import type {
+  DashboardStat,
+  MedicineItemRecord,
+  MedicineRecord,
+  SaleRecord,
+} from "../lib/api";
 
 type SaleStatus = SaleRecord["status"];
 type PaymentMethod = SaleRecord["paymentMethod"];
@@ -38,6 +44,7 @@ function SalesPage() {
   const actor = user?.name ?? user?.email ?? "System";
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [medicineItems, setMedicineItems] = useState<MedicineItemRecord[]>([]);
+  const [medicines, setMedicines] = useState<MedicineRecord[]>([]);
   const [stats, setStats] = useState<DashboardStat[]>([]);
   const [form, setForm] = useState<SaleForm>(emptyForm);
   const [search, setSearch] = useState("");
@@ -55,13 +62,15 @@ function SalesPage() {
       }
 
       try {
-        const [salesData, itemsData] = await Promise.all([
+        const [salesData, itemsData, medicinesData] = await Promise.all([
           fetchSales(),
           fetchMedicineItems(),
+          fetchMedicines(),
         ]);
         setSales(salesData.sales);
         setStats(salesData.stats);
         setMedicineItems(itemsData);
+        setMedicines(medicinesData);
         setError(null);
       } catch {
         setError("Unable to load sales right now.");
@@ -134,6 +143,11 @@ function SalesPage() {
     return visibleSales.slice(start, start + SALES_PER_PAGE);
   }, [currentPage, visibleSales]);
 
+  const totalAmountValue = useMemo(
+    () => sales.reduce((sum, sale) => sum + Number(sale.totalAmount), 0),
+    [sales]
+  );
+
   useEffect(() => {
     setCurrentPage(1);
   }, [search, statusFilter]);
@@ -147,9 +161,22 @@ function SalesPage() {
   const handleChange = (
     event: ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
+    const { name, value } = event.target;
+
+    if (name === "medicineName") {
+      const selectedMedicine = medicines.find((medicine) => medicine.name === value);
+
+      setForm((current) => ({
+        ...current,
+        medicineName: value,
+        totalAmount: selectedMedicine?.sellingPrice ?? current.totalAmount,
+      }));
+      return;
+    }
+
     setForm((current) => ({
       ...current,
-      [event.target.name]: event.target.value,
+      [name]: value,
     }));
   };
 
@@ -550,13 +577,20 @@ function SalesPage() {
       </div>
 
       <div className="stats-grid">
-        {stats.map((item) => (
-          <article key={item.label} className="stat-card">
-            <span>{item.label}</span>
-            <strong>{item.value}</strong>
-            <p>{item.description}</p>
-          </article>
-        ))}
+        <article className="stat-card">
+          <span>Total amount</span>
+          <strong>${totalAmountValue.toFixed(2)}</strong>
+          <p>Combined amount across all sales currently recorded in the ledger.</p>
+        </article>
+        {stats
+          .filter((item) => item.label !== "Transactions")
+          .map((item) => (
+            <article key={item.label} className="stat-card">
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+              <p>{item.description}</p>
+            </article>
+          ))}
       </div>
 
       <section className="panel panel--wide">
