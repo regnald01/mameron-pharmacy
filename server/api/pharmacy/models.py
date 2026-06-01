@@ -67,3 +67,94 @@ class Medicine(models.Model):
     class Meta:
         ordering = ["id"]
 
+
+class MedicineItem(models.Model):
+    name = models.CharField(max_length=120, unique=True)
+
+    class Meta:
+        ordering = ["id"]
+
+
+class StockRecord(models.Model):
+    medicine_item = models.OneToOneField(
+        MedicineItem,
+        on_delete=models.CASCADE,
+        related_name="stock_record",
+    )
+    total_items = models.PositiveIntegerField(default=0)
+    stock_balance = models.PositiveIntegerField(default=0)
+    expiry_date = models.DateField()
+
+    class Meta:
+        ordering = ["id"]
+
+
+class OrderRecord(models.Model):
+    STATUS_PENDING = "Pending"
+    STATUS_APPROVED = "Approved"
+    STATUS_IN_TRANSIT = "In Transit"
+    STATUS_DELIVERED = "Delivered"
+    STATUS_ISSUE = "Issue"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_APPROVED, "Approved"),
+        (STATUS_IN_TRANSIT, "In Transit"),
+        (STATUS_DELIVERED, "Delivered"),
+        (STATUS_ISSUE, "Issue"),
+    ]
+
+    PRIORITY_HIGH = "High"
+    PRIORITY_MEDIUM = "Medium"
+    PRIORITY_LOW = "Low"
+    PRIORITY_CHOICES = [
+        (PRIORITY_HIGH, "High"),
+        (PRIORITY_MEDIUM, "Medium"),
+        (PRIORITY_LOW, "Low"),
+    ]
+
+    customer_name = models.CharField(max_length=120)
+    prescription_code = models.CharField(max_length=32, unique=True)
+    medicine_name = models.CharField(max_length=120)
+    quantity = models.PositiveIntegerField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default=PRIORITY_MEDIUM)
+    assigned_to = models.CharField(max_length=120)
+    created_at_label = models.CharField(max_length=64)
+
+    class Meta:
+        ordering = ["id"]
+
+
+class SaleRecord(models.Model):
+    PAYMENT_CASH = "Cash"
+    PAYMENT_CARD = "Card"
+    PAYMENT_MOBILE = "Mobile"
+    PAYMENT_INSURANCE = "Insurance"
+    PAYMENT_CHOICES = [
+        (PAYMENT_CASH, "Cash"),
+        (PAYMENT_CARD, "Card"),
+        (PAYMENT_MOBILE, "Mobile"),
+        (PAYMENT_INSURANCE, "Insurance"),
+    ]
+
+    STATUS_COMPLETED = "Completed"
+    STATUS_PENDING = "Pending"
+    STATUS_REFUNDED = "Refunded"
+    STATUS_CHOICES = [
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_PENDING, "Pending"),
+        (STATUS_REFUNDED, "Refunded"),
+    ]
+
+    customer_name = models.CharField(max_length=120)
+    invoice_code = models.CharField(max_length=32, unique=True)
+    medicine_name = models.CharField(max_length=120)
+    units = models.PositiveIntegerField()
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_COMPLETED)
+    cashier_name = models.CharField(max_length=120)
+    sold_at_label = models.CharField(max_length=64)
+
+    class Meta:
+        ordering = ["id"]
