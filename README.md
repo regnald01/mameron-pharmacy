@@ -115,3 +115,42 @@ Modern secure login interface with role-based authentication.
 # License
 
 This project is licensed for educational and commercial pharmacy management use.
+
+---
+
+# Docker Development Setup
+
+This repository now includes a development-focused Docker setup for the current project structure:
+
+- `frontend`: Vite dev server on `http://localhost:5173`
+- `backend`: Django dev server on `http://localhost:8000`
+
+## Docker Files Included
+
+- `docker-compose.yml`
+- `client/Dockerfile`
+- `client/.dockerignore`
+- `server/api/Dockerfile`
+- `server/api/.dockerignore`
+- `server/api/entrypoint.sh`
+- `server/api/requirements-docker.txt`
+
+## Start With Docker
+
+From the project root:
+
+```bash
+docker compose up --build
+```
+
+Then open:
+
+- Frontend: `http://localhost:5173`
+- Backend API: `http://localhost:8000/api/`
+
+## Notes
+
+- This Docker setup is for development, not production.
+- It uses the app's current Django `sqlite3` database setup.
+- Django migrations run automatically when the backend container starts.
+- Frontend and backend source folders are mounted into the containers for live reload.

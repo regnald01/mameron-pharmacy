@@ -1,0 +1,31 @@
+services:
+  backend:
+    build:
+      context: ./server/api
+    container_name: mameron-backend-dev
+    working_dir: /app
+    environment:
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,backend
+    volumes:
+      - ./server/api:/app
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./client
+    container_name: mameron-frontend-dev
+    working_dir: /app
+    environment:
+      VITE_PROXY_TARGET: http://backend:8000
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./client:/app
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  frontend_node_modules:
