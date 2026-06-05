@@ -1,7 +1,7 @@
 from django.db import models
 
 
-class StaffUser(models.Model):
+class Staff_User(models.Model):
     ROLE_ADMIN = "Admin"
     ROLE_PHARMACIST = "Pharmacist"
     ROLE_CASHIER = "Cashier"
@@ -36,7 +36,7 @@ class StaffUser(models.Model):
         return self.email
 
 
-class ActivityRecord(models.Model):
+class Activity_Record(models.Model):
     SEVERITY_HIGH = "High"
     SEVERITY_MEDIUM = "Medium"
     SEVERITY_LOW = "Low"
@@ -57,7 +57,7 @@ class ActivityRecord(models.Model):
         ordering = ["id"]
 
 
-class Medicine(models.Model):
+class Medicine_Product(models.Model):
     name = models.CharField(max_length=120)
     purchase_price = models.DecimalField(max_digits=10, decimal_places=2)
     selling_price = models.DecimalField(max_digits=10, decimal_places=2)
@@ -68,16 +68,16 @@ class Medicine(models.Model):
         ordering = ["id"]
 
 
-class MedicineItem(models.Model):
+class Medicine_Item(models.Model):
     name = models.CharField(max_length=120, unique=True)
 
     class Meta:
         ordering = ["id"]
 
 
-class StockRecord(models.Model):
+class Stock_Record(models.Model):
     medicine_item = models.OneToOneField(
-        MedicineItem,
+        Medicine_Item,
         on_delete=models.CASCADE,
         related_name="stock_record",
     )
@@ -89,7 +89,7 @@ class StockRecord(models.Model):
         ordering = ["id"]
 
 
-class OrderRecord(models.Model):
+class Order_Record(models.Model):
     STATUS_PENDING = "Pending"
     STATUS_APPROVED = "Approved"
     STATUS_IN_TRANSIT = "In Transit"
@@ -125,7 +125,7 @@ class OrderRecord(models.Model):
         ordering = ["id"]
 
 
-class SaleRecord(models.Model):
+class Sale_Record(models.Model):
     PAYMENT_CASH = "Cash"
     PAYMENT_CARD = "Card"
     PAYMENT_MOBILE = "Mobile"

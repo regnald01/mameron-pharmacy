@@ -10,7 +10,15 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
-from .models import ActivityRecord, Medicine, MedicineItem, OrderRecord, SaleRecord, StaffUser, StockRecord
+from .models import (
+    Activity_Record as ActivityRecord,
+    Medicine_Item as MedicineItem,
+    Medicine_Product as Medicine,
+    Order_Record as OrderRecord,
+    Sale_Record as SaleRecord,
+    Staff_User as StaffUser,
+    Stock_Record as StockRecord,
+)
 
 
 def _json_body(request: HttpRequest) -> dict[str, Any]:
